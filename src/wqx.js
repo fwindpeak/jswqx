@@ -58,19 +58,22 @@ function JsWqx() {
     this.fp_bak2 = 0;
     this.fp_buff = new Uint8Array(0x100);
 
-    this.cycles = 0;
+    this._cycles = 0;
     this._frame_timer = 0;
-    this._frame_counter = 0;
+    this._next_timer0_cycles = 0;
+    this._next_timer1_cycles = 0;
     this._timer0_counter = 0;
-    this._timer1_counter = 0;
     this._lcd_ctx = null;
     this._lcd_buff = new Uint8Array(1600);
 }
 JsWqx.prototype.RESET_ADDR = 0xFFFC;
 JsWqx.prototype.NMI_ADDR = 0xFFFA;
 JsWqx.prototype.IRQ_ADDR = 0xFFFE;
-JsWqx.prototype.CPU_FREQ = 51200000;
+JsWqx.prototype.CPU_FREQ = 5120000;
 JsWqx.prototype.PERFERED_FPS = 50;
+JsWqx.prototype.CYCLES_FRAME = 5120000 / 50;
+JsWqx.prototype.CYCLES_TIMER0 = 5120000 / 2;
+JsWqx.prototype.CYCLES_TIMER1 = 5120000 / 256;
 
 JsWqx.prototype.pByte = function(buffer, byteOffset, length) {
     if (byteOffset == null) byteOffset = buffer.byteOffset | 0;
@@ -259,6 +262,7 @@ JsWqx.prototype.op_func_tbl = [
         addr = (addr + this_.reg_y) & 0xFFFF;
         this_.reg_pc = (this_.reg_pc + 1) & 0xFFFF;
         this_._setNz(this_.reg_a |= this_.load(addr));
+        cycles = (cycles + cycles_add) | 0;
         cycles = (cycles + 5) | 0;
         return cycles;
     },
@@ -306,6 +310,7 @@ JsWqx.prototype.op_func_tbl = [
         addr = (addr + this_.reg_y) & 0xFFFF;
         this_.reg_pc = (this_.reg_pc + 2) & 0xFFFF;
         this_._setNz(this_.reg_a |= this_.load(addr));
+        cycles = (cycles + cycles_add) | 0;
         cycles = (cycles + 4) | 0;
         return cycles;
     },
@@ -326,6 +331,7 @@ JsWqx.prototype.op_func_tbl = [
         addr = (addr + this_.reg_x) & 0xFFFF;
         this_.reg_pc = (this_.reg_pc + 2) & 0xFFFF;
         this_._setNz(this_.reg_a |= this_.load(addr));
+        cycles = (cycles + cycles_add) | 0;
         cycles = (cycles + 4) | 0;
         return cycles;
     },
@@ -688,6 +694,7 @@ JsWqx.prototype.op_func_tbl = [
         addr = (addr + this_.reg_y) & 0xFFFF;
         this_.reg_pc = (this_.reg_pc + 1) & 0xFFFF;
         this_._setNz(this_.reg_a ^= this_.load(addr));
+        cycles = (cycles + cycles_add) | 0;
         cycles = (cycles + 5) | 0;
         return cycles;
     },
@@ -738,6 +745,7 @@ JsWqx.prototype.op_func_tbl = [
         addr = (addr + this_.reg_y) & 0xFFFF;
         this_.reg_pc = (this_.reg_pc + 2) & 0xFFFF;
         this_._setNz(this_.reg_a ^= this_.load(addr));
+        cycles = (cycles + cycles_add) | 0;
         cycles = (cycles + 4) | 0;
         return cycles;
     },
@@ -758,6 +766,7 @@ JsWqx.prototype.op_func_tbl = [
         addr = (addr + this_.reg_x) & 0xFFFF;
         this_.reg_pc = (this_.reg_pc + 2) & 0xFFFF;
         this_._setNz(this_.reg_a ^= this_.load(addr));
+        cycles = (cycles + cycles_add) | 0;
         cycles = (cycles + 4) | 0;
         return cycles;
     },
@@ -1324,6 +1333,7 @@ JsWqx.prototype.op_func_tbl = [
         addr = (addr + this_.reg_y) & 0xFFFF;
         this_.reg_pc = (this_.reg_pc + 1) & 0xFFFF;
         this_._setNz(this_.reg_a = this_.load(addr));
+        cycles = (cycles + cycles_add) | 0;
         cycles = (cycles + 5) | 0;
         return cycles;
     },
@@ -1374,6 +1384,7 @@ JsWqx.prototype.op_func_tbl = [
         addr = (addr + this_.reg_y) & 0xFFFF;
         this_.reg_pc = (this_.reg_pc + 2) & 0xFFFF;
         this_._setNz(this_.reg_a = this_.load(addr));
+        cycles = (cycles + cycles_add) | 0;
         cycles = (cycles + 4) | 0;
         return cycles;
     },
@@ -1394,6 +1405,7 @@ JsWqx.prototype.op_func_tbl = [
         addr = (addr + this_.reg_x) & 0xFFFF;
         this_.reg_pc = (this_.reg_pc + 2) & 0xFFFF;
         this_._setNz(this_.reg_y = this_.load(addr));
+        cycles = (cycles + cycles_add) | 0;
         cycles = (cycles + 4) | 0;
         return cycles;
     },
@@ -1405,6 +1417,7 @@ JsWqx.prototype.op_func_tbl = [
         addr = (addr + this_.reg_x) & 0xFFFF;
         this_.reg_pc = (this_.reg_pc + 2) & 0xFFFF;
         this_._setNz(this_.reg_a = this_.load(addr));
+        cycles = (cycles + cycles_add) | 0;
         cycles = (cycles + 4) | 0;
         return cycles;
     },
@@ -1416,6 +1429,7 @@ JsWqx.prototype.op_func_tbl = [
         addr = (addr + this_.reg_y) & 0xFFFF;
         this_.reg_pc = (this_.reg_pc + 2) & 0xFFFF;
         this_._setNz(this_.reg_x = this_.load(addr));
+        cycles = (cycles + cycles_add) | 0;
         cycles = (cycles + 4) | 0;
         return cycles;
     },
@@ -1557,6 +1571,7 @@ JsWqx.prototype.op_func_tbl = [
         var tmp1 = this_.reg_a - this_.load(addr);
         this_.flag_c = (tmp1 >= 0) | 0;
         this_._setNz(tmp1);
+        cycles = (cycles + cycles_add) | 0;
         cycles = (cycles + 5) | 0;
         return cycles;
     },
@@ -1606,6 +1621,7 @@ JsWqx.prototype.op_func_tbl = [
         var tmp1 = this_.reg_a - this_.load(addr);
         this_.flag_c = (tmp1 >= 0) | 0;
         this_._setNz(tmp1);
+        cycles = (cycles + cycles_add) | 0;
         cycles = (cycles + 4) | 0;
         return cycles;
     },
@@ -1628,6 +1644,7 @@ JsWqx.prototype.op_func_tbl = [
         var tmp1 = this_.reg_a - this_.load(addr);
         this_.flag_c = (tmp1 >= 0) | 0;
         this_._setNz(tmp1);
+        cycles = (cycles + cycles_add) | 0;
         cycles = (cycles + 4) | 0;
         return cycles;
     },
@@ -1929,10 +1946,7 @@ JsWqx.prototype._generateAndPlayJGWav = function() {
 
     function read3F(this_, addr) {
         var idx = this_.p_io[0x3E];
-        if (idx < 80) {
-            return this_.clock_buff[idx];
-        }
-        return this_.p_io[addr];
+        return idx < 80 ? this_.clock_buff[idx] : 0;
     }
 
     function writeXX(this_, addr, value) {
@@ -2091,7 +2105,6 @@ JsWqx.prototype._generateAndPlayJGWav = function() {
                 this_.jg_wav_idx++;
             }
         } else if (value === 0x80) {
-            this_.p_io[0x20] = 0x80;
             this_.p_io[0x20] = 0x80;
             this_.jg_wav_flags = 0;
             if (this_.jg_wav_idx) {
@@ -2404,19 +2417,20 @@ JsWqx.prototype.adjustTime = function() {
         if (++this.clock_buff[1] >= 60) {
             this.clock_buff[1] = 0;
             if (++this.clock_buff[2] >= 24) {
-                this.clock_buff[2] &= 0;
+                this.clock_buff[2] &= 0xC0;
                 ++this.clock_buff[3];
             }
         }
     }
 };
-JsWqx.prototype.encounterIRQClock = function() {
-    if ((this.clock_buff[10] & 0x02) && (this.clock_flags & 0x02)) {
-        return (((this.clock_buff[7] & 0x80) && !((this.clock_buff[7] ^ this.clock_buff[2])) & 0x1F) ||
-            ((this.clock_buff[6] & 0x80) && !((this.clock_buff[6] ^ this.clock_buff[1])) & 0x3F) ||
-            ((this.clock_buff[5] & 0x80) && !((this.clock_buff[5] ^ this.clock_buff[0])) & 0x3F));
+JsWqx.prototype.encounterCountDown = function() {
+    if (!(this.clock_buff[10] & 0x02) || !(this.clock_flags & 0x02)) {
+        return false;
     }
-    return true;
+    return (
+    ((this.clock_buff[7] & 0x80) && !(((this.clock_buff[7] ^ this.clock_buff[2])) & 0x1F)) ||
+        ((this.clock_buff[6] & 0x80) && !(((this.clock_buff[6] ^ this.clock_buff[1])) & 0x3F)) ||
+        ((this.clock_buff[5] & 0x80) && !(((this.clock_buff[5] ^ this.clock_buff[0])) & 0x3F)));
 };
 
 JsWqx.prototype.setKey = function(key, value) {
@@ -2477,7 +2491,6 @@ JsWqx.prototype.reset = function() {
     this.reg_sp_ = 0xFF;
     this.setRegPs(0x24);
     this.reg_pc = this.peekWord(this.RESET_ADDR);
-    this.cycles = 0;
     if (this._lcd_ctx) {
         this._lcd_ctx.clearRect(0, 0, 188, 80);
     }
@@ -2489,8 +2502,12 @@ JsWqx.prototype.reset = function() {
     this.jg_wav_idx = 0;
     this.jg_wav_playing = 0;
     this.fp_step = 0;
-    this._frame_counter = 0;
-    this._timer1_counter = 0;
+
+    this._cycles = 0;
+    this._next_frame_cycles = this.CYCLES_FRAME;
+    this._next_timer0_cycles = this.CYCLES_TIMER0;
+    this._next_timer1_cycles = this.CYCLES_TIMER1;
+    this._timer0_counter = 0;
 };
 JsWqx.prototype.execute = function() {
     var opcode = this.peekByte(this.reg_pc);
@@ -2538,22 +2555,19 @@ JsWqx.prototype.updateLcd = function() {
 };
 
 JsWqx.prototype.frame = function() {
-    var next_frame_cycles = ((this._frame_counter + 1) * (this.CPU_FREQ / this.PERFERED_FPS)) | 0;
-    var CYCLES_TIMER0 = (this.CPU_FREQ / 2) | 0;
-    var CYCLES_TIMER1 = (this.CPU_FREQ / 256) | 0;
-    var next_timer0_cycles = ((this._timer0_counter + 1) * CYCLES_TIMER0) | 0;
-    var next_timer1_cycles = ((this._timer1_counter + 1) * CYCLES_TIMER1) | 0;
+    var next_timer0_cycles = this._next_timer0_cycles;
+    var next_timer1_cycles = this._next_timer1_cycles;
     var should_irq = false;
-    var cycles = this.cycles;
-    while (cycles < next_frame_cycles) {
+    var cycles = this._cycles;
+    while (cycles < this.CYCLES_FRAME) {
         cycles = (cycles + this.execute()) | 0;
         if (cycles >= next_timer0_cycles) {
-            next_timer0_cycles += CYCLES_TIMER0;
+            next_timer0_cycles = (next_timer0_cycles + this.CYCLES_TIMER0) | 0;
             this._timer0_counter = (this._timer0_counter + 1) | 0;
             if (!(this._timer0_counter & 0x01)) {
                 this.adjustTime();
             }
-            if (!this.encounterIRQClock() || (this._timer0_counter & 0x01)) {
+            if (!this.encounterCountDown() || (this._timer0_counter & 0x01)) {
                 this.p_io[0x3D] = 0;
             } else {
                 this.p_io[0x3D] = 0x20;
@@ -2566,15 +2580,15 @@ JsWqx.prototype.frame = function() {
             this.irq();
         }
         if (cycles >= next_timer1_cycles) {
-            next_timer1_cycles = (next_timer1_cycles + CYCLES_TIMER1) | 0;
-            this._timer1_counter = (this._timer1_counter + 1) | 0;
+            next_timer1_cycles = (next_timer1_cycles + this.CYCLES_TIMER1) | 0;
             this.clock_buff[4]++;
             this.p_io[0x01] |= 0x08;
             should_irq = true;
         }
     }
-    this._frame_counter = (this._frame_counter + 1) | 0;
-    this.cycles = cycles;
+    this._next_timer0_cycles = (next_timer0_cycles - this.CYCLES_FRAME) | 0;
+    this._next_timer1_cycles = (next_timer1_cycles - this.CYCLES_FRAME) | 0;
+    this._cycles = (cycles - this.CYCLES_FRAME) | 0;
     this.updateLcd();
 };
 

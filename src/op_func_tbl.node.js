@@ -45,9 +45,9 @@ var $INDY = '' +
     'addr = (addr + this.reg_y) & 0xFFFF;' +
     'this.reg_pc = (this.reg_pc + 1) & 0xFFFF;';
 
-var $LDA = 'this._setNz(this.reg_a = this.load(addr));';
-var $LDX = 'this._setNz(this.reg_x = this.load(addr));';
-var $LDY = 'this._setNz(this.reg_y = this.load(addr));';
+var $LDA = 'this._setNz(this.reg_a = this.load(addr));' + $CYC('cycles_add');
+var $LDX = 'this._setNz(this.reg_x = this.load(addr));' + $CYC('cycles_add');
+var $LDY = 'this._setNz(this.reg_y = this.load(addr));' + $CYC('cycles_add');
 var $STA = 'this.store(addr, this.reg_a);';
 var $STX = 'this.store(addr, this.reg_x);';
 var $STY = 'this.store(addr, this.reg_y);';
@@ -65,8 +65,8 @@ var $PLA = 'this._setNz(this.reg_a = this._pop());';
 var $PLP = 'this.setRegPs(this._pop());';
 
 var $AND = 'this._setNz(this.reg_a &= this.load(addr));' + $CYC('cycles_add');
-var $EOR = 'this._setNz(this.reg_a ^= this.load(addr));';
-var $ORA = 'this._setNz(this.reg_a |= this.load(addr));';
+var $EOR = 'this._setNz(this.reg_a ^= this.load(addr));' + $CYC('cycles_add');
+var $ORA = 'this._setNz(this.reg_a |= this.load(addr));' + $CYC('cycles_add');
 var $BIT = '' +
     'var tmp1 = this.load(addr);' +
     'this.flag_z = !(this.reg_a & tmp1) | 0;' +
@@ -78,19 +78,17 @@ var $ADC = '' +
     'var tmp2 = (this.reg_a + tmp1 + this.flag_c) | 0;' +
     'this.flag_c = (tmp2 > 0xFF) | 0;' +
     'this.flag_v = ((this.reg_a ^ tmp1 ^ 0x80) & (this.reg_a ^ tmp2) & 0x80) >> 7;' +
-    'this._setNz(this.reg_a = tmp2 & 0xFF);' +
-    $CYC('cycles_add');
+    'this._setNz(this.reg_a = tmp2 & 0xFF);' + $CYC('cycles_add');
 var $SBC = '' +
     'var tmp1 = this.load(addr);' +
     'var tmp2 = (this.reg_a - tmp1 + this.flag_c - 1) | 0;' +
     'this.flag_c = (tmp2 >= 0) | 0;' +
     'this.flag_v = ((this.reg_a ^ tmp1) & (this.reg_a ^ tmp2) & 0x80) >> 7;' +
-    'this._setNz(this.reg_a = tmp2 & 0xFF);' +
-    $CYC('cycles_add');
+    'this._setNz(this.reg_a = tmp2 & 0xFF);' + $CYC('cycles_add');
 var $CMP = '' +
     'var tmp1 = this.reg_a - this.load(addr);' +
     'this.flag_c = (tmp1 >= 0) | 0;' +
-    'this._setNz(tmp1);';
+    'this._setNz(tmp1);' + $CYC('cycles_add');
 var $CPX = '' +
     'var tmp1 = this.reg_x - this.load(addr);' +
     'this.flag_c = (tmp1 >= 0) | 0;' +
