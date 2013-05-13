@@ -1,32 +1,34 @@
 <!DOCTYPE html>
 <html>
 <head>
-    <meta charset="utf-8"/>
-    <title>文曲星模拟器</title>
-    <script src="src/m65c02.js"></script>
-    <!--<script src="refs/wqxsimlogs.js"></script>-->
-    <script src="src/wqx.js"></script>
-    <script src="src/keyinput.js"></script>
+    <meta charset="utf-8" />
+    <title></title>
+    <script src="./src/wqx.js"></script>
     <style>
         #wqx {
-            width: 370px;
+            position: absolute;
+            left: 16px;
+            top: 50px;
+            padding: 10px;
+            border: 1px solid gray;
+            background-color: #cfcfcf;
         }
         #lcd {
-            width: 320px;
-            height: 160px;
-            background-color: #98fb98;
-            padding: 0 25px;
+            background-color: #90B057;
+        }
+        #split {
+            border-top: 2px solid gray;
+            height: 0;
+            margin: 5px 0;
         }
         #keypad {
-            border: 1px solid gray;
-            border-radius: 5px;
-            padding: 5px 3px 5px 5px;
-            width: 360px;
-            height: 152px;
+            width: 376px;
+            height: 160px;
+            padding-top: 3px;
         }
         #keypad>div {
             height: 24px;
-            margin-bottom: 2px;
+            margin-bottom: 3px;
         }
         .keypad_unit {
             width: 32px;
@@ -35,11 +37,14 @@
             display: inline-block;
             background-color: rgb(213, 233, 205);
             border: 1px solid rgb(128, 208, 70);
-            margin-right: 2px;
+            margin-right: 4px;
             -webkit-user-select: none;
             -moz-user-select: none;
             -o-user-select: none;
             cursor: pointer;
+        }
+        .keypad_unit:last-child {
+            margin-right: 0;
         }
         .keypad_unit.pressed {
             background-color: rgb(192, 192, 192);
@@ -53,240 +58,298 @@
             position: absolute;
             width: 32px;
             height: 20px;
+            overflow: hidden;
         }
     </style>
 </head>
 <body>
-<h1>文曲星模拟器</h1>
-<button id="run" onclick="run();" disabled>run</button>
-<button id="stop" onclick="stop();" disabled>stop</button>
-<button id="reset" onclick="reset();">reset</button>
-<button id="load_demo" onclick="loadDemo();">loadDemo</button>
-<div id="wqx">
-    <div id="lcd"></div>
-    <div>
-        <button id="toogle_keypad">软键盘 开/关</button>
-        <label><input tabindex="0" id="input" type="text" placeholder="键盘输入" style="ime-mode: disabled;"/></label>
-    </div>
-    <div id="keypad">
-        <div>
-            <div class="keypad_unit" data-key="F8"><div class="keypad_unit_label">Dict</div>
-            </div><div class="keypad_unit" data-key="F9"><div class="keypad_unit_label">Card</div>
-            </div><div class="keypad_unit" data-key="F10"><div class="keypad_unit_label">Calc</div>
-            </div><div class="keypad_unit" data-key="F6"><div class="keypad_unit_label">Rem</div>
-            </div><div class="keypad_unit" data-key="F7"><div class="keypad_unit_label">Data</div>
-            </div><div class="keypad_unit" data-key="F5"><div class="keypad_unit_label">Time</div>
-            </div><div class="keypad_unit" data-key="F11"><div class="keypad_unit_label">Net</div>
-            </div><div class="keypad_unit" style="visibility: hidden">
-            </div><div class="keypad_unit" style="visibility: hidden">
-            </div><div class="keypad_unit" style="visibility: hidden"></div>
-        </div>
-        <div>
-            <div class="keypad_unit" style="visibility: hidden">
-            </div><div class="keypad_unit" style="visibility: hidden">
-            </div><div class="keypad_unit" data-key="F1"><div class="keypad_unit_label">F1</div>
-            </div><div class="keypad_unit" data-key="F2"><div class="keypad_unit_label">F2</div>
-            </div><div class="keypad_unit" data-key="F3"><div class="keypad_unit_label">F3</div>
-            </div><div class="keypad_unit" data-key="F4"><div class="keypad_unit_label">F4</div>
-            </div><div class="keypad_unit" style="visibility: hidden">
-            </div><div class="keypad_unit" style="visibility: hidden">
-            </div><div class="keypad_unit" data-key="F12"><div class="keypad_unit_label">Power</div>
-            </div><div class="keypad_unit" style="visibility: hidden"></div>
-        </div>
-        <div>
-            <div class="keypad_unit" data-key="Q"><div class="keypad_unit_label">Q</div>
-            </div><div class="keypad_unit" data-key="W"><div class="keypad_unit_label">W</div>
-            </div><div class="keypad_unit" data-key="E"><div class="keypad_unit_label">E</div>
-            </div><div class="keypad_unit" data-key="R"><div class="keypad_unit_label">R</div>
-            </div><div class="keypad_unit" data-key="T"><div class="keypad_unit_label">T</div>
-            </div><div class="keypad_unit" data-key="Y"><div class="keypad_unit_label">Y</div>
-            </div><div class="keypad_unit" data-key="U"><div class="keypad_unit_label">U</div>
-            </div><div class="keypad_unit" data-key="I"><div class="keypad_unit_label">I</div>
-            </div><div class="keypad_unit" data-key="O"><div class="keypad_unit_label">O</div>
-            </div><div class="keypad_unit" data-key="P"><div class="keypad_unit_label">P</div></div>
-        </div>
-        <div>
-            <div class="keypad_unit" data-key="A"><div class="keypad_unit_label">A</div>
-            </div><div class="keypad_unit" data-key="S"><div class="keypad_unit_label">S</div>
-            </div><div class="keypad_unit" data-key="D"><div class="keypad_unit_label">D</div>
-            </div><div class="keypad_unit" data-key="F"><div class="keypad_unit_label">F</div>
-            </div><div class="keypad_unit" data-key="G"><div class="keypad_unit_label">G</div>
-            </div><div class="keypad_unit" data-key="H"><div class="keypad_unit_label">H</div>
-            </div><div class="keypad_unit" data-key="J"><div class="keypad_unit_label">J</div>
-            </div><div class="keypad_unit" data-key="K"><div class="keypad_unit_label">K</div>
-            </div><div class="keypad_unit" data-key="L"><div class="keypad_unit_label">L</div>
-            </div><div class="keypad_unit" data-key="Enter"><div class="keypad_unit_label">Enter</div></div>
-        </div>
-        <div>
-            <div class="keypad_unit" data-key="Z"><div class="keypad_unit_label">Z</div>
-            </div><div class="keypad_unit" data-key="X"><div class="keypad_unit_label">X</div>
-            </div><div class="keypad_unit" data-key="C"><div class="keypad_unit_label">C</div>
-            </div><div class="keypad_unit" data-key="V"><div class="keypad_unit_label">V</div>
-            </div><div class="keypad_unit" data-key="B"><div class="keypad_unit_label">B</div>
-            </div><div class="keypad_unit" data-key="N"><div class="keypad_unit_label">N</div>
-            </div><div class="keypad_unit" data-key="M"><div class="keypad_unit_label">M</div>
-            </div><div class="keypad_unit" data-key="PageUp"><div class="keypad_unit_label">PgUp</div>
-            </div><div class="keypad_unit" data-key="Up"><div class="keypad_unit_label">Up</div>
-            </div><div class="keypad_unit" data-key="PageDown"><div class="keypad_unit_label">PgDn</div></div>
-        </div>
-        <div>
-            <div class="keypad_unit" data-key="Tab"><div class="keypad_unit_label">Help</div>
-            </div><div class="keypad_unit" data-key="Shift"><div class="keypad_unit_label">Shift</div>
-            </div><div class="keypad_unit" data-key="CapsLock"><div class="keypad_unit_label">Caps</div>
-            </div><div class="keypad_unit" data-key="Esc"><div class="keypad_unit_label">Esc</div>
-            </div><div class="keypad_unit" data-key="0"><div class="keypad_unit_label">0</div>
-            </div><div class="keypad_unit" data-key="Period"><div class="keypad_unit_label">.</div>
-            </div><div class="keypad_unit" data-key="Equals"><div class="keypad_unit_label">=</div>
-            </div><div class="keypad_unit" data-key="Left"><div class="keypad_unit_label">Left</div>
-            </div><div class="keypad_unit" data-key="Down"><div class="keypad_unit_label">Down</div>
-            </div><div class="keypad_unit" data-key="Right"><div class="keypad_unit_label">Right</div></div>
-        </div>
-    </div>
+<div id="controls">
+    <button id="play_or_stop" disabled>play</button>
+    <button id="reset" disabled>reset</button>
+    <button id="load">load</button>
 </div>
-<p>
-    <span>orginal: <a href="http://bbs.emsky.net/viewthread.php?tid=33474">http://bbs.emsky.net/viewthread.php?tid=33474</a><br/>
-        目前只在chrome浏览器测试过，别的浏览器应该也有能跑的。<br/>
-        由于ROM文件有24M之大，若加载过慢，请自行下载到硬盘上，拖拽到模拟器的屏幕区域手动加载。<br/>
-        若想要离线使用能正常加载，请在chrome启动参数中加入`--allow-file-access-from-files`。<br/>
-        <a href="./rom/obj_lu.bin">ROM文件下载地址</a></span>
-</p>
+<div id="wqx">
+    <canvas id="lcd" width="376" height="160"></canvas>
+    <div id="split"></div>
+    <div id="keypad" tabindex="0"></div>
+</div>
 <script>
-//    var table = document.createElement('table');
-//    table.style.cssText = 'position:fixed; right: 150px; top: 150px;';
-//    table.border = "1";
-//    for (var i=0; i<8; i++) {
-//        var row = table.insertRow(-1);
-//        for (var j=0; j<8; j++) {
-//            var cell = row.insertCell(-1);
-//            cell.innerHTML = '0x' + (i * 8 + j).toString(16);
-//            (function (i, j){
-//                cell.onmousedown = function (){
-//                    wqx.keypadmatrix[j][i] = 1;
-//                };
-//                cell.onmouseup = function (){
-//                    wqx.keypadmatrix[j][i] = 0;
-//                };
-//            })(i, j);
-//        }
-//    }
-//    document.body.appendChild(table);
-</script>
-<script>
-    var lcdDiv = document.getElementById('lcd')
-    var wqx = new Wqx(lcdDiv);
-    var keyInput = new WqxKeyInput(wqx, document.getElementById('input'));
-    var keypadDiv = document.getElementById('keypad');
-    keyInput.onpress = function (key){
-        var keyUnit = document.querySelector('div.keypad_unit[data-key="' + key + '"]');
-        if (keyUnit) {
-            keyUnit.classList.add('pressed');
-        }
-    };
-    keyInput.onrelease = function (key){
-        var keyUnit = document.querySelector('div.keypad_unit[data-key="' + key + '"]');
-        if (keyUnit) {
-            keyUnit.classList.remove('pressed');
-        }
-    };
-    keypadDiv.addEventListener('mousedown', function (evt){
-        var div = evt.target;
-        do {
-            if (div.classList.contains('keypad_unit')) {
-                keyInput.keyDown(div.getAttribute('data-key'));
-                break;
+    var btn_play_or_stop = document.getElementById('play_or_stop');
+    var btn_reset = document.getElementById('reset');
+    var btn_load = document.getElementById('load');
+    var lcd_canvas = document.getElementById('lcd');
+    var keypad_div = document.getElementById('keypad');
+    var wqx = new JsWqx(lcd_canvas);
+    btn_load.onclick = function (){
+        btn_load.setAttribute('disabled', 'disabled');
+        var rom;
+        var nor;
+        function check(){
+            if (rom && nor) {
+                setTimeout(function (){
+                    btn_play_or_stop.removeAttribute('disabled');
+                    btn_reset.removeAttribute('disabled');
+                    btn_load.textContent = 'done';
+                    wqx.init(rom, nor, lcd_canvas.getContext('2d'));
+                    wqx.reset();
+                });
+            } else {
+                btn_load.removeAttribute('disabled');
+                btn_load.textContent = 'fail';
             }
-            div = div.parentNode;
-        } while (div && div.nodeType == 1);
-    }, false);
-    keypadDiv.addEventListener('mouseup', function (evt){
-        var div = evt.target;
-        do {
-            if (div.classList.contains('keypad_unit')) {
-                keyInput.keyUp(div.getAttribute('data-key'));
-                break;
-            }
-            div = div.parentNode;
-        } while (div && div.nodeType == 1);
-    }, false);
-    document.getElementById('toogle_keypad').addEventListener('click', function (){
-        if (keypadDiv.style.display === 'none') {
-            keypadDiv.style.display = '';
-        } else {
-            keypadDiv.style.display = 'none';
         }
-    }, false);
-
-    var romLoaded = false;
-    var norLoaded = false;
-    var xhrRom = null;
-    function check(){
-        if (romLoaded && norLoaded) {
-            document.getElementById('run').removeAttribute('disabled');
+        function progress(i, p1, p2){
+            btn_load.textContent = 'loading '+ i +'/2: '+ p1 +'/'+ p2;
         }
-    }
-    lcdDiv.addEventListener('dragover', function (evt){
-        evt.preventDefault();
-    }, false);
-    lcdDiv.addEventListener('drop', function (evt){
-        var file;
-        try {
-            file = evt.dataTransfer.files[0];
-        } catch(ex){}
-        var fileReader = new FileReader();
-        fileReader.addEventListener('loadend', function (evt){
-            if (!xhrRom) {
-                xhrRom.abort();
-                xhrRom = null;
-            }
-            wqx.loadBROM(fileReader.result);
-            romLoaded = true;
-            check();
-        }, false);
-        fileReader.readAsArrayBuffer(file);
-        evt.preventDefault();
-    }, false);
-
-    function loadDemo(){
-        var xhrNor = new XMLHttpRequest();
-        xhrNor.open('GET', './rom/nc1020.fls', true);
-        xhrNor.responseType = 'arraybuffer';
-        xhrNor.addEventListener('loadend', function (){
-            wqx.loadNorFlash(xhrNor.response);
-            norLoaded = true;
-            check();
-        }, false);
-        xhrNor.send();
-        // todo: progress info
-        document.getElementById('load_demo').setAttribute('disabled', 'disabled');
-        xhrRom = new XMLHttpRequest();
-        xhrRom.addEventListener('progress', function (evt){
-            document.getElementById('load_demo').innerHTML = 'ROM加载中 ' + evt.loaded + '/' + evt.total;
-        }, false);
-        xhrRom.addEventListener('loadend', function (){
-            document.getElementById('load_demo').innerHTML = 'ROM加载完毕';
-            wqx.loadBROM(xhrRom.response);
-            romLoaded = true;
-            check();
-        }, false);
-        xhrRom.open('GET', './rom/obj_lu.bin', true);
+        var xhrRom = new XMLHttpRequest();
+        xhrRom.open('GET', './refs/obj_lu.bin', true);
         xhrRom.responseType = 'arraybuffer';
+        xhrRom.addEventListener('progress', function (evt){
+            progress(1, evt.loaded, evt.total);
+        });
+        xhrRom.addEventListener('loadend', function (){
+            rom = xhrRom.response;
+            var xhrNor = new XMLHttpRequest();
+            xhrNor.open('GET', './refs/nc1020.fls', true);
+            xhrNor.responseType = 'arraybuffer';
+            xhrNor.addEventListener('progress', function (evt){
+                progress(2, evt.loaded, evt.total);
+            });
+            xhrNor.addEventListener('loadend', function (){
+                nor = xhrNor.response;
+                check();
+            }, false);
+            xhrNor.send();
+        }, false);
         xhrRom.send();
+    };
 
-    }
-
-    function run(){
-        wqx.run();
-        document.getElementById('run').setAttribute('disabled', 'disabled');
-        document.getElementById('stop').removeAttribute('disabled');
-    }
-    function stop(){
-        wqx.stop();
-        document.getElementById('stop').setAttribute('disabled', 'disabled');
-        document.getElementById('run').removeAttribute('disabled');
-    }
-    function reset(){
+    var toggle = true;
+    btn_play_or_stop.onclick = function (){
+        if (toggle) {
+            btn_play_or_stop.textContent = 'stop';
+            wqx.play();
+        } else {
+            btn_play_or_stop.textContent = 'play';
+            wqx.stop();
+        }
+        toggle = !toggle;
+    };
+    btn_reset.onclick = function (){
         wqx.reset();
-    }
+    };
+
+    (function (){
+        var KEY_CODE_MAP = new Array(0x100);
+        KEY_CODE_MAP[0x7b] = 0x02;
+        KEY_CODE_MAP[0x74] = 0x0b;
+        KEY_CODE_MAP[0x75] = 0x0c;
+        KEY_CODE_MAP[0x76] = 0x0d;
+        KEY_CODE_MAP[0x77] = 0x09;
+        KEY_CODE_MAP[0x78] = 0x0a;
+        KEY_CODE_MAP[0x79] = 0x08;
+        KEY_CODE_MAP[0x7a] = 0x0e;
+        KEY_CODE_MAP[0x70] = 0x10;
+        KEY_CODE_MAP[0x71] = 0x11;
+        KEY_CODE_MAP[0x72] = 0x12;
+        KEY_CODE_MAP[0x73] = 0x13;
+        KEY_CODE_MAP[0x4f] = 0x18;
+        KEY_CODE_MAP[0x4c] = 0x19;
+        KEY_CODE_MAP[0x26] = 0x1a;
+        KEY_CODE_MAP[0x28] = 0x1b;
+        KEY_CODE_MAP[0x50] = 0x1c;
+        KEY_CODE_MAP[0x0d] = 0x1d;
+        KEY_CODE_MAP[0x22] = 0x1e;
+        KEY_CODE_MAP[0x27] = 0x1f;
+        KEY_CODE_MAP[0x51] = 0x20;
+        KEY_CODE_MAP[0x57] = 0x21;
+        KEY_CODE_MAP[0x45] = 0x22;
+        KEY_CODE_MAP[0x52] = 0x23;
+        KEY_CODE_MAP[0x54] = 0x24;
+        KEY_CODE_MAP[0x59] = 0x25;
+        KEY_CODE_MAP[0x55] = 0x26;
+        KEY_CODE_MAP[0x49] = 0x27;
+        KEY_CODE_MAP[0x41] = 0x28;
+        KEY_CODE_MAP[0x53] = 0x29;
+        KEY_CODE_MAP[0x44] = 0x2a;
+        KEY_CODE_MAP[0x46] = 0x2b;
+        KEY_CODE_MAP[0x47] = 0x2c;
+        KEY_CODE_MAP[0x48] = 0x2d;
+        KEY_CODE_MAP[0x4a] = 0x2e;
+        KEY_CODE_MAP[0x4b] = 0x2f;
+        KEY_CODE_MAP[0x5a] = 0x30;
+        KEY_CODE_MAP[0x58] = 0x31;
+        KEY_CODE_MAP[0x43] = 0x32;
+        KEY_CODE_MAP[0x56] = 0x33;
+        KEY_CODE_MAP[0x42] = 0x34;
+        KEY_CODE_MAP[0x4e] = 0x35;
+        KEY_CODE_MAP[0x4d] = 0x36;
+        KEY_CODE_MAP[0x21] = 0x37;
+        KEY_CODE_MAP[0x09] = 0x38;
+        KEY_CODE_MAP[0xe5] = 0x39;
+        KEY_CODE_MAP[0x14] = 0x3a;
+        KEY_CODE_MAP[0x1b] = 0x3b;
+        KEY_CODE_MAP[0x30] = 0x3c;
+        KEY_CODE_MAP[0xbe] = 0x3d;
+        KEY_CODE_MAP[0xbb] = 0x3e;
+        KEY_CODE_MAP[0x25] = 0x3f;
+        // backspace
+        KEY_CODE_MAP[0x08] = KEY_CODE_MAP[0x25];
+        // 1 ~ 9
+        KEY_CODE_MAP[0x31] = KEY_CODE_MAP[0x42];
+        KEY_CODE_MAP[0x32] = KEY_CODE_MAP[0x4e];
+        KEY_CODE_MAP[0x33] = KEY_CODE_MAP[0x4d];
+        KEY_CODE_MAP[0x34] = KEY_CODE_MAP[0x47];
+        KEY_CODE_MAP[0x35] = KEY_CODE_MAP[0x48];
+        KEY_CODE_MAP[0x36] = KEY_CODE_MAP[0x4a];
+        KEY_CODE_MAP[0x37] = KEY_CODE_MAP[0x54];
+        KEY_CODE_MAP[0x38] = KEY_CODE_MAP[0x59];
+        KEY_CODE_MAP[0x39] = KEY_CODE_MAP[0x55];
+
+        var KEY_NAME_MAP = new Array(0x40);
+
+        KEY_NAME_MAP[0x0B] = '英汉 (F5)^汉英';
+        KEY_NAME_MAP[0x0C] = '名片 (F6)^通讯';
+        KEY_NAME_MAP[0x0D] = '计算 (F7)^换算';
+        KEY_NAME_MAP[0x09] = '行程 (F8)^资料';
+        KEY_NAME_MAP[0x0A] = '测验 (F9)^游戏';
+        KEY_NAME_MAP[0x08] = '其他 (F10)^时间';
+        KEY_NAME_MAP[0x0E] = '网络 (F11)';
+
+        KEY_NAME_MAP[0x10] = 'F1';
+        KEY_NAME_MAP[0x11] = 'F2';
+        KEY_NAME_MAP[0x12] = 'F3';
+        KEY_NAME_MAP[0x13] = 'F4';
+
+        KEY_NAME_MAP[0x18] = 'O';
+        KEY_NAME_MAP[0x19] = 'L';
+        KEY_NAME_MAP[0x1A] = '⇧';
+        KEY_NAME_MAP[0x1B] = '⇩';
+        KEY_NAME_MAP[0x1C] = 'P';
+        KEY_NAME_MAP[0x1D] = 'Enter';
+        KEY_NAME_MAP[0x1E] = 'PgDn';
+        KEY_NAME_MAP[0x1F] = '⇨';
+
+        KEY_NAME_MAP[0x20] = 'Q';
+        KEY_NAME_MAP[0x21] = 'W';
+        KEY_NAME_MAP[0x22] = 'E';
+        KEY_NAME_MAP[0x23] = 'R';
+        KEY_NAME_MAP[0x24] = 'T /7';
+        KEY_NAME_MAP[0x25] = 'Y /8';
+        KEY_NAME_MAP[0x26] = 'U /9';
+        KEY_NAME_MAP[0x27] = 'I';
+
+        KEY_NAME_MAP[0x28] = 'A';
+        KEY_NAME_MAP[0x29] = 'S';
+        KEY_NAME_MAP[0x2A] = 'D';
+        KEY_NAME_MAP[0x2B] = 'F';
+        KEY_NAME_MAP[0x2C] = 'G /4';
+        KEY_NAME_MAP[0x2D] = 'H /5';
+        KEY_NAME_MAP[0x2E] = 'J /6';
+        KEY_NAME_MAP[0x2F] = 'K';
+
+        KEY_NAME_MAP[0x30] = 'Z';
+        KEY_NAME_MAP[0x31] = 'X';
+        KEY_NAME_MAP[0x32] = 'C';
+        KEY_NAME_MAP[0x33] = 'V';
+        KEY_NAME_MAP[0x34] = 'B /1';
+        KEY_NAME_MAP[0x35] = 'N /2';
+        KEY_NAME_MAP[0x36] = 'M /3';
+        KEY_NAME_MAP[0x37] = 'PgUp';
+
+        KEY_NAME_MAP[0x38] = '求助 (Tab)';
+        KEY_NAME_MAP[0x39] = '中英 (Shift)';
+        KEY_NAME_MAP[0x3A] = 'CapsLk';
+        KEY_NAME_MAP[0x3B] = '退出 (Esc)';
+        KEY_NAME_MAP[0x3C] = '0';
+        KEY_NAME_MAP[0x3D] = '.';
+        KEY_NAME_MAP[0x3E] = '=';
+        KEY_NAME_MAP[0x3F] = '⇦';
+
+        var KEYPAD = [
+                [0x10, 0x11, 0x12, 0x13, null, null, null, null, null, null],
+                [null, null, null, 0x0B, 0x0C, 0x0D, 0x09, 0x0A, 0x08, 0x0E],
+                [0x20, 0x21, 0x22, 0x23, 0x24, 0x25, 0x26, 0x27, 0x18, 0x1C],
+                [0x28, 0x29, 0x2A, 0x2B, 0x2C, 0x2D, 0x2E, 0x2F, 0x19, 0x1D],
+                [0x30, 0x31, 0x32, 0x33, 0x34, 0x35, 0x36, 0x37, 0x1A, 0x1E],
+                [0x38, 0x39, 0x3A, 0x3B, 0x3C, 0x3D, 0x3E, 0x3F, 0x1B, 0x1F]
+        ];
+
+        var buff = [];
+        for (var r = 0; r<KEYPAD.length; r++){
+            var row = KEYPAD[r];
+            buff.push('<div>');
+            for (var c=0; c<row.length; c++) {
+                var cell = row[c];
+                if (cell != null) {
+                    buff.push('<div class="keypad_unit" data-key="0x');
+                    buff.push(('00'+cell.toString(16)).slice(-2));
+                    buff.push('" title="');
+                    buff.push(KEY_NAME_MAP[cell]);
+                    buff.push('"><div class="keypad_unit_label">');
+                    buff.push(KEY_NAME_MAP[cell]);
+                    buff.push('</div></div>');
+                } else {
+                    buff.push('<div class="keypad_unit" style="visibility: hidden"></div>');
+                }
+            }
+            buff.push('</div>');
+        }
+        keypad_div.innerHTML = buff.join('');
+
+        function setKey(key, downOrUp){
+            var str_key = '0x'+ ('00' + key.toString(16)).slice(-2);
+            var keyUnit = document.querySelector('div.keypad_unit[data-key="' + str_key + '"]');
+            if (keyUnit) {
+                if (downOrUp) {
+                    keyUnit.classList.add('pressed');
+                } else {
+                    keyUnit.classList.remove('pressed');
+                }
+            }
+            wqx.setKey(key, downOrUp);
+        }
+
+        var last_mouse_down_key = null;
+        keypad_div.addEventListener('mousedown', function (evt){
+            var div = evt.target;
+            do {
+                if (div.classList.contains('keypad_unit')) {
+                    var key = Number(div.getAttribute('data-key'));
+                    last_mouse_down_key = key;
+                    setKey(key, true);
+                    break;
+                }
+                div = div.parentNode;
+            } while (div && div.nodeType == 1);
+        }, false);
+        document.addEventListener('mouseup', function (evt){
+            if (last_mouse_down_key != null) {
+                if (!down_keys[last_mouse_down_key]) {
+                    setKey(last_mouse_down_key, false);
+                }
+                last_mouse_down_key = null;
+            }
+        }, false);
+
+        var down_keys = {};
+        keypad_div.addEventListener('keydown', function (evt){
+            if (KEY_CODE_MAP[evt.keyCode] != null) {
+                var key = KEY_CODE_MAP[evt.keyCode];
+                down_keys[key] = 1;
+                setKey(key, true);
+                evt.preventDefault();
+            }
+        });
+        keypad_div.addEventListener('keyup', function (evt){
+            if (KEY_CODE_MAP[evt.keyCode] != null) {
+                var key = KEY_CODE_MAP[evt.keyCode];
+                down_keys[key] = 0;
+                setKey(key, false);
+                evt.preventDefault();
+            }
+        });
+    })();
 
 </script>
 </body>

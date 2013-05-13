@@ -1,958 +1,2592 @@
-// cc800
-// http://bbs.emsky.net/viewthread.php?tid=33474
+function JsWqx() {
+    this.reg_pc = 0;
+    this.reg_a = 0;
+    this.reg_x = 0;
+    this.reg_y = 0;
+    this.reg_sp_ = 0;
 
-var Wqx = (function (){
-    var io00_bank_switch = 0x00;
-    var io01_int_enable = 0x01;
-    var io01_int_status = 0x01;
-    var io03_timer1_val = 0x03;
-    var io04_stop_timer0 = 0x04;
-    var io04_general_ctrl = 0x04;
-    var io05_start_timer0 = 0x05;
-    var io05_clock_ctrl = 0x05;
-    var io06_stop_timer1 = 0x06;
-    var io06_lcd_config = 0x06;
-    var io07_port_config = 0x07;
-    var io07_start_timer1 = 0x07;
-    var io08_port0_data = 0x08;
-    var io09_port1_data = 0x09;
-    var io0A_bios_bsw = 0x0A;
-    var io0A_roa = 0x0A;
-    var io0B_port3_data = 0x0B;
-    var io0B_lcd_ctrl = 0x0B;
-    var io0C_general_status = 0x0C;
-    var io0C_timer01_ctrl = 0x0C;
-    var io0C_lcd_config = 0x0C;
-    var io0D_volumeid = 0x0D;
-    var io0D_lcd_segment = 0x0D;
-    var io0E_dac_data = 0x0E;
-    var io0F_zp_bsw = 0x0F;
-    var io0F_port0_dir = 0x0F;
-    var io15_port1_dir = 0x15;
-    var io16_port2_dir = 0x16;
-    var io17_port2_data = 0x17;
-    var io18_port4_data = 0x18;
-    var io19_ckv_select = 0x19;
-    var io1A_volume_set = 0x1A;
-    var io1B_pwm_data = 0x1B;
-    var io1C_batt_detect = 0x1C;
-    var io1E_batt_detect = 0x1E;
-    var io20_JG = 0x20;
-    var io23_unknow = 0x23;
-    var io_ROA_bit = 0x80; // RAM/ROM (io_bios_bsw)
+    this.flag_c = 0;
+    this.flag_z = 0;
+    this.flag_i = 0;
+    this.flag_d = 0;
+    this.flag_b = 0;
+    this.flag_v = 0;
+    this.flag_n = 0;
 
-    var map0000 = 0;
-    var map2000 = 1;
-    var map4000 = 2;
-    var map6000 = 3;
-    var map8000 = 4;
-    var mapA000 = 5;
-    var mapC000 = 6;
-    var mapE000 = 7;
+    // wqx has 32k ram.
+    this.ram = new Uint8Array(0x8000);
+    this.page0 = this.pByte(this.ram, 0, 0x2000);
+    this.page1 = this.pByte(this.ram, 0x2000, 0x2000);
+    this.page2 = this.pByte(this.ram, 0x4000, 0x2000);
+    this.page6 = this.pByte(this.ram, 0x6000, 0x2000);
+    this.stack = this.pByte(this.ram, 0x100, 0x100);
+    this.p_io = this.pByte(this.ram, 0, 0x40);
+    this.p_40 = this.pByte(this.ram, 0x40, 0x40);
+    this.bak_40 = new Uint8Array(0x40);
+    this.p_lcd = null;
 
-    var SPDC1016Frequency = 3686400;
-    var FrameRate = 40;
-    var CyclesPerFrame = SPDC1016Frequency / FrameRate;
-    var CyclesPerNMI = SPDC1016Frequency / 2;
-    var CyclesPer10Ms = SPDC1016Frequency / 100;
+    this.rom = new Uint8Array(0x8000 * 0x300);
+    this.nor = new Uint8Array(0x8000 * 0x20);
+    this.rom_volume0 = new Array(0x100);
+    this.rom_volume1 = new Array(0x100);
+    this.rom_volume2 = new Array(0x100);
+    for (var i = 0; i < 0x100; i++) {
+        this.rom_volume0[i] = this.pByte(this.rom, 0x8000 * (i), 0x8000);
+        this.rom_volume1[i] = this.pByte(this.rom, 0x8000 * (0x100 + i), 0x8000);
+        this.rom_volume2[i] = this.pByte(this.rom, 0x8000 * (0x200 + i), 0x8000);
+    }
+    this.nor_banks = new Array(0x20);
+    for (var j = 0; j < 0x20; j++) {
+        this.nor_banks[j] = this.pByte(this.nor, 0x8000 * j, 0x8000);
+    }
+    this.bbs_pages = new Array(0x10);
+    this.memmap = new Array(8);
 
-    function memcpy(dest, src, length){
-        for (var i=0; i<length; i++) {
-            dest[i] = src[i];
+    this.clock_buff = new Uint8Array(80);
+    this.clock_flags = 0;
+    this.jg_wav_buff = new Uint8Array(0x20);
+    this.jg_wav_flags = 0;
+    this.jg_wav_idx = 0;
+    this.jg_wav_playing = 0;
+    this.keypad_matrix = new Uint8Array(8);
+
+    // flash programming.
+    this.fp_step = 0;
+    this.fp_type = 0;
+    this.fp_bank = 0;
+    this.fp_bak1 = 0;
+    this.fp_bak2 = 0;
+    this.fp_buff = new Uint8Array(0x100);
+
+    this.cycles = 0;
+    this._frame_timer = 0;
+    this._frame_counter = 0;
+    this._timer0_counter = 0;
+    this._timer1_counter = 0;
+    this._lcd_ctx = null;
+    this._lcd_buff = new Uint8Array(1600);
+}
+JsWqx.prototype.RESET_ADDR = 0xFFFC;
+JsWqx.prototype.NMI_ADDR = 0xFFFA;
+JsWqx.prototype.IRQ_ADDR = 0xFFFE;
+JsWqx.prototype.CPU_FREQ = 51200000;
+JsWqx.prototype.PERFERED_FPS = 50;
+
+JsWqx.prototype.pByte = function(buffer, byteOffset, length) {
+    if (byteOffset == null) byteOffset = buffer.byteOffset | 0;
+    if (!(buffer instanceof ArrayBuffer)) {
+        byteOffset += buffer.byteOffset;
+        buffer = buffer.buffer;
+    }
+    if (length == null) length = buffer.byteLength - byteOffset;
+    return new Uint8Array(buffer, byteOffset, length);
+};
+JsWqx.prototype.memset = function(dest, value, size) {
+    for (var i = 0; i < size; i++) {
+        dest[i] = value;
+    }
+};
+JsWqx.prototype.memcpy = function(dest, src, size) {
+    for (var i = 0; i < size; i++) {
+        dest[i] = src[i];
+    }
+};
+JsWqx.prototype.getRegPs = function() {
+    return (this.flag_c) |
+        (this.flag_z << 1) |
+        (this.flag_i << 2) |
+        (this.flag_d << 3) |
+        (this.flag_b << 4) |
+        (this.flag_v << 6) |
+        (this.flag_n << 7) |
+        0x20;
+};
+JsWqx.prototype.setRegPs = function(value) {
+    this.flag_c = (value & 0x01);
+    this.flag_z = (value & 0x02) >> 1;
+    this.flag_i = (value & 0x04) >> 2;
+    this.flag_d = (value & 0x08) >> 3;
+    this.flag_b = (value & 0x10) >> 4;
+    this.flag_v = (value & 0x40) >> 6;
+    this.flag_n = (value & 0x80) >> 7;
+};
+JsWqx.prototype.peekByte = function(addr) {
+    return this.memmap[addr >> 13][addr & 0x1FFF];
+};
+
+JsWqx.prototype.peekWord = function(addr) {
+    return this.peekByte(addr) |
+        (this.peekByte((addr + 1) & 0xFFFF) << 8);
+};
+
+JsWqx.prototype.fp_type_map = new Uint8Array(0x100);
+JsWqx.prototype.fp_type_map[0x90] = 1;
+JsWqx.prototype.fp_type_map[0xA0] = 2;
+JsWqx.prototype.fp_type_map[0x80] = 3;
+JsWqx.prototype.fp_type_map[0xA8] = 4;
+JsWqx.prototype.fp_type_map[0x88] = 5;
+JsWqx.prototype.fp_type_map[0x78] = 6;
+
+JsWqx.prototype._setNz = function(value) {
+    this.flag_n = (value & 0x80) >> 7;
+    this.flag_z = !value | 0;
+    return value;
+};
+JsWqx.prototype._push = function(value) {
+    this.stack[this.reg_sp_] = value;
+    this.reg_sp_ = (this.reg_sp_ - 1) & 0xFF;
+};
+JsWqx.prototype._pop = function() {
+    return this.stack[this.reg_sp_ = (this.reg_sp_ + 1) & 0xFF];
+};
+JsWqx.prototype.op_func_tbl = [
+    function op00(this_) {
+        var cycles = 0;
+        this_.reg_pc = (this_.reg_pc + 1) & 0xFFFF;
+        this_._push(this_.reg_pc >> 8);
+        this_._push(this_.reg_pc & 0xFF);
+        this_.flag_b = 1;
+        this_._push(this_.getRegPs());
+        //wqx set flag_i here.
+        this_.flag_i = 1;
+        this_.reg_pc = this_.peekWord(this_.IRQ_ADDR);
+        cycles = (cycles + 7) | 0;
+        return cycles;
+    },
+    function op01(this_) {
+        var cycles = 0;
+        var addr = this_.peekWord((this_.peekByte(this_.reg_pc) + this_.reg_x) & 0xFF);
+        this_.reg_pc = (this_.reg_pc + 1) & 0xFFFF;
+        this_._setNz(this_.reg_a |= this_.load(addr));
+        cycles = (cycles + 6) | 0;
+        return cycles;
+    },
+    function op02(this_) {
+        return 0;
+    },
+    function op03(this_) {
+        return 0;
+    },
+    function op04(this_) {
+        return 0;
+    },
+    function op05(this_) {
+        var cycles = 0;
+        var addr = this_.peekByte(this_.reg_pc);
+        this_.reg_pc = (this_.reg_pc + 1) & 0xFFFF;
+        this_._setNz(this_.reg_a |= this_.load(addr));
+        cycles = (cycles + 3) | 0;
+        return cycles;
+    },
+    function op06(this_) {
+        var cycles = 0;
+        var addr = this_.peekByte(this_.reg_pc);
+        this_.reg_pc = (this_.reg_pc + 1) & 0xFFFF;
+        var tmp1 = this_.load(addr);
+        this_.flag_c = tmp1 >> 7;
+        this_.store(addr, this_._setNz((tmp1 << 1) & 0xFF));
+        cycles = (cycles + 5) | 0;
+        return cycles;
+    },
+    function op07(this_) {
+        return 0;
+    },
+    function op08(this_) {
+        var cycles = 0;
+        this_._push(this_.getRegPs());
+        cycles = (cycles + 3) | 0;
+        return cycles;
+    },
+    function op09(this_) {
+        var cycles = 0;
+        var addr = this_.reg_pc;
+        this_.reg_pc = (this_.reg_pc + 1) & 0xFFFF;
+        this_._setNz(this_.reg_a |= this_.load(addr));
+        cycles = (cycles + 2) | 0;
+        return cycles;
+    },
+    function op0A(this_) {
+        var cycles = 0;
+        this_.flag_c = this_.reg_a >> 7;
+        this_._setNz(this_.reg_a = (this_.reg_a << 1) & 0xFF);
+        cycles = (cycles + 2) | 0;
+        return cycles;
+    },
+    function op0B(this_) {
+        return 0;
+    },
+    function op0C(this_) {
+        return 0;
+    },
+    function op0D(this_) {
+        var cycles = 0;
+        var addr = this_.peekWord(this_.reg_pc);
+        this_.reg_pc = (this_.reg_pc + 2) & 0xFFFF;
+        this_._setNz(this_.reg_a |= this_.load(addr));
+        cycles = (cycles + 4) | 0;
+        return cycles;
+    },
+    function op0E(this_) {
+        var cycles = 0;
+        var addr = this_.peekWord(this_.reg_pc);
+        this_.reg_pc = (this_.reg_pc + 2) & 0xFFFF;
+        var tmp1 = this_.load(addr);
+        this_.flag_c = tmp1 >> 7;
+        this_.store(addr, this_._setNz((tmp1 << 1) & 0xFF));
+        cycles = (cycles + 6) | 0;
+        return cycles;
+    },
+    function op0F(this_) {
+        return 0;
+    },
+    function op10(this_) {
+        var cycles = 0;
+        var addr = this_.peekByte(this_.reg_pc);
+        this_.reg_pc = (this_.reg_pc + 1) & 0xFFFF;
+        addr = (this_.reg_pc + addr - ((addr & 0x80) << 1)) & 0xFFFF;
+        if (!this_.flag_n) {
+            cycles = (cycles + ((this_.reg_pc ^ addr) & 0xFF00 ? 1 : 2)) | 0;
+            this_.reg_pc = addr;
+        }
+        cycles = (cycles + 2) | 0;
+        return cycles;
+    },
+    function op11(this_) {
+        var cycles = 0;
+        var cycles_add = 0;
+        var addr = this_.peekWord(this_.peekByte(this_.reg_pc));
+        cycles_add = ((addr & 0xFF) + this_.reg_y) & 0xFF00 ? 1 : 0;
+        addr = (addr + this_.reg_y) & 0xFFFF;
+        this_.reg_pc = (this_.reg_pc + 1) & 0xFFFF;
+        this_._setNz(this_.reg_a |= this_.load(addr));
+        cycles = (cycles + 5) | 0;
+        return cycles;
+    },
+    function op12(this_) {
+        return 0;
+    },
+    function op13(this_) {
+        return 0;
+    },
+    function op14(this_) {
+        return 0;
+    },
+    function op15(this_) {
+        var cycles = 0;
+        var addr = (this_.peekByte(this_.reg_pc) + this_.reg_x) & 0xFF;
+        this_.reg_pc = (this_.reg_pc + 1) & 0xFFFF;
+        this_._setNz(this_.reg_a |= this_.load(addr));
+        cycles = (cycles + 4) | 0;
+        return cycles;
+    },
+    function op16(this_) {
+        var cycles = 0;
+        var addr = (this_.peekByte(this_.reg_pc) + this_.reg_x) & 0xFF;
+        this_.reg_pc = (this_.reg_pc + 1) & 0xFFFF;
+        var tmp1 = this_.load(addr);
+        this_.flag_c = tmp1 >> 7;
+        this_.store(addr, this_._setNz((tmp1 << 1) & 0xFF));
+        cycles = (cycles + 6) | 0;
+        return cycles;
+    },
+    function op17(this_) {
+        return 0;
+    },
+    function op18(this_) {
+        var cycles = 0;
+        this_.flag_c = 0;
+        cycles = (cycles + 2) | 0;
+        return cycles;
+    },
+    function op19(this_) {
+        var cycles = 0;
+        var cycles_add = 0;
+        var addr = this_.peekWord(this_.reg_pc);
+        cycles_add = ((addr & 0xFF) + this_.reg_y) & 0xFF00 ? 1 : 0;
+        addr = (addr + this_.reg_y) & 0xFFFF;
+        this_.reg_pc = (this_.reg_pc + 2) & 0xFFFF;
+        this_._setNz(this_.reg_a |= this_.load(addr));
+        cycles = (cycles + 4) | 0;
+        return cycles;
+    },
+    function op1A(this_) {
+        return 0;
+    },
+    function op1B(this_) {
+        return 0;
+    },
+    function op1C(this_) {
+        return 0;
+    },
+    function op1D(this_) {
+        var cycles = 0;
+        var cycles_add = 0;
+        var addr = this_.peekWord(this_.reg_pc);
+        cycles_add = ((addr & 0xFF) + this_.reg_x) & 0xFF00 ? 1 : 0;
+        addr = (addr + this_.reg_x) & 0xFFFF;
+        this_.reg_pc = (this_.reg_pc + 2) & 0xFFFF;
+        this_._setNz(this_.reg_a |= this_.load(addr));
+        cycles = (cycles + 4) | 0;
+        return cycles;
+    },
+    function op1E(this_) {
+        var cycles = 0;
+        var addr = this_.peekWord(this_.reg_pc);
+        addr = (addr + this_.reg_x) & 0xFFFF;
+        this_.reg_pc = (this_.reg_pc + 2) & 0xFFFF;
+        var tmp1 = this_.load(addr);
+        this_.flag_c = tmp1 >> 7;
+        this_.store(addr, this_._setNz((tmp1 << 1) & 0xFF));
+        cycles = (cycles + 6) | 0;
+        return cycles;
+    },
+    function op1F(this_) {
+        return 0;
+    },
+    function op20(this_) {
+        var cycles = 0;
+        var addr = this_.peekWord(this_.reg_pc);
+        this_.reg_pc = (this_.reg_pc + 2) & 0xFFFF;
+        this_.reg_pc = (this_.reg_pc - 1) & 0xFFFF;
+        this_._push(this_.reg_pc >> 8);
+        this_._push(this_.reg_pc & 0xFF);
+        this_.reg_pc = addr;
+        cycles = (cycles + 6) | 0;
+        return cycles;
+    },
+    function op21(this_) {
+        var cycles = 0;
+        var addr = this_.peekWord((this_.peekByte(this_.reg_pc) + this_.reg_x) & 0xFF);
+        this_.reg_pc = (this_.reg_pc + 1) & 0xFFFF;
+        this_._setNz(this_.reg_a &= this_.load(addr));
+        cycles = (cycles + 6) | 0;
+        return cycles;
+    },
+    function op22(this_) {
+        return 0;
+    },
+    function op23(this_) {
+        return 0;
+    },
+    function op24(this_) {
+        var cycles = 0;
+        var addr = this_.peekByte(this_.reg_pc);
+        this_.reg_pc = (this_.reg_pc + 1) & 0xFFFF;
+        var tmp1 = this_.load(addr);
+        this_.flag_z = !(this_.reg_a & tmp1) | 0;
+        this_.flag_n = tmp1 >> 7;
+        this_.flag_v = (tmp1 & 0x40) >> 6;
+        cycles = (cycles + 3) | 0;
+        return cycles;
+    },
+    function op25(this_) {
+        var cycles = 0;
+        var addr = this_.peekByte(this_.reg_pc);
+        this_.reg_pc = (this_.reg_pc + 1) & 0xFFFF;
+        this_._setNz(this_.reg_a &= this_.load(addr));
+        cycles = (cycles + 3) | 0;
+        return cycles;
+    },
+    function op26(this_) {
+        var cycles = 0;
+        var addr = this_.peekByte(this_.reg_pc);
+        this_.reg_pc = (this_.reg_pc + 1) & 0xFFFF;
+        var tmp1 = this_.load(addr);
+        this_.store(addr, this_._setNz(((tmp1 << 1) | this_.flag_c) & 0xFF));
+        this_.flag_c = tmp1 >> 7;
+        cycles = (cycles + 5) | 0;
+        return cycles;
+    },
+    function op27(this_) {
+        return 0;
+    },
+    function op28(this_) {
+        var cycles = 0;
+        this_.setRegPs(this_._pop());
+        cycles = (cycles + 4) | 0;
+        return cycles;
+    },
+    function op29(this_) {
+        var cycles = 0;
+        var addr = this_.reg_pc;
+        this_.reg_pc = (this_.reg_pc + 1) & 0xFFFF;
+        this_._setNz(this_.reg_a &= this_.load(addr));
+        cycles = (cycles + 2) | 0;
+        return cycles;
+    },
+    function op2A(this_) {
+        var cycles = 0;
+        var tmp1 = this_.flag_c;
+        this_.flag_c = this_.reg_a >> 7;
+        this_._setNz(this_.reg_a = ((this_.reg_a << 1) | tmp1) & 0xFF);
+        cycles = (cycles + 2) | 0;
+        return cycles;
+    },
+    function op2B(this_) {
+        return 0;
+    },
+    function op2C(this_) {
+        var cycles = 0;
+        var addr = this_.peekWord(this_.reg_pc);
+        this_.reg_pc = (this_.reg_pc + 2) & 0xFFFF;
+        var tmp1 = this_.load(addr);
+        this_.flag_z = !(this_.reg_a & tmp1) | 0;
+        this_.flag_n = tmp1 >> 7;
+        this_.flag_v = (tmp1 & 0x40) >> 6;
+        cycles = (cycles + 4) | 0;
+        return cycles;
+    },
+    function op2D(this_) {
+        var cycles = 0;
+        var addr = this_.peekWord(this_.reg_pc);
+        this_.reg_pc = (this_.reg_pc + 2) & 0xFFFF;
+        this_._setNz(this_.reg_a &= this_.load(addr));
+        cycles = (cycles + 4) | 0;
+        return cycles;
+    },
+    function op2E(this_) {
+        var cycles = 0;
+        var addr = this_.peekWord(this_.reg_pc);
+        this_.reg_pc = (this_.reg_pc + 2) & 0xFFFF;
+        var tmp1 = this_.load(addr);
+        this_.store(addr, this_._setNz(((tmp1 << 1) | this_.flag_c) & 0xFF));
+        this_.flag_c = tmp1 >> 7;
+        cycles = (cycles + 6) | 0;
+        return cycles;
+    },
+    function op2F(this_) {
+        return 0;
+    },
+    function op30(this_) {
+        var cycles = 0;
+        var addr = this_.peekByte(this_.reg_pc);
+        this_.reg_pc = (this_.reg_pc + 1) & 0xFFFF;
+        addr = (this_.reg_pc + addr - ((addr & 0x80) << 1)) & 0xFFFF;
+        if (this_.flag_n) {
+            cycles = (cycles + ((this_.reg_pc ^ addr) & 0xFF00 ? 1 : 2)) | 0;
+            this_.reg_pc = addr;
+        }
+        cycles = (cycles + 2) | 0;
+        return cycles;
+    },
+    function op31(this_) {
+        var cycles = 0;
+        var cycles_add = 0;
+        var addr = this_.peekWord(this_.peekByte(this_.reg_pc));
+        cycles_add = ((addr & 0xFF) + this_.reg_y) & 0xFF00 ? 1 : 0;
+        addr = (addr + this_.reg_y) & 0xFFFF;
+        this_.reg_pc = (this_.reg_pc + 1) & 0xFFFF;
+        this_._setNz(this_.reg_a &= this_.load(addr));
+        cycles = (cycles + cycles_add) | 0;
+        cycles = (cycles + 5) | 0;
+        return cycles;
+    },
+    function op32(this_) {
+        return 0;
+    },
+    function op33(this_) {
+        return 0;
+    },
+    function op34(this_) {
+        return 0;
+    },
+    function op35(this_) {
+        var cycles = 0;
+        var addr = (this_.peekByte(this_.reg_pc) + this_.reg_x) & 0xFF;
+        this_.reg_pc = (this_.reg_pc + 1) & 0xFFFF;
+        this_._setNz(this_.reg_a &= this_.load(addr));
+        cycles = (cycles + 4) | 0;
+        return cycles;
+    },
+    function op36(this_) {
+        var cycles = 0;
+        var addr = (this_.peekByte(this_.reg_pc) + this_.reg_x) & 0xFF;
+        this_.reg_pc = (this_.reg_pc + 1) & 0xFFFF;
+        var tmp1 = this_.load(addr);
+        this_.store(addr, this_._setNz(((tmp1 << 1) | this_.flag_c) & 0xFF));
+        this_.flag_c = tmp1 >> 7;
+        cycles = (cycles + 6) | 0;
+        return cycles;
+    },
+    function op37(this_) {
+        return 0;
+    },
+    function op38(this_) {
+        var cycles = 0;
+        this_.flag_c = 1;
+        cycles = (cycles + 2) | 0;
+        return cycles;
+    },
+    function op39(this_) {
+        var cycles = 0;
+        var cycles_add = 0;
+        var addr = this_.peekWord(this_.reg_pc);
+        cycles_add = ((addr & 0xFF) + this_.reg_y) & 0xFF00 ? 1 : 0;
+        addr = (addr + this_.reg_y) & 0xFFFF;
+        this_.reg_pc = (this_.reg_pc + 2) & 0xFFFF;
+        this_._setNz(this_.reg_a &= this_.load(addr));
+        cycles = (cycles + cycles_add) | 0;
+        cycles = (cycles + 4) | 0;
+        return cycles;
+    },
+    function op3A(this_) {
+        return 0;
+    },
+    function op3B(this_) {
+        return 0;
+    },
+    function op3C(this_) {
+        return 0;
+    },
+    function op3D(this_) {
+        var cycles = 0;
+        var cycles_add = 0;
+        var addr = this_.peekWord(this_.reg_pc);
+        cycles_add = ((addr & 0xFF) + this_.reg_x) & 0xFF00 ? 1 : 0;
+        addr = (addr + this_.reg_x) & 0xFFFF;
+        this_.reg_pc = (this_.reg_pc + 2) & 0xFFFF;
+        this_._setNz(this_.reg_a &= this_.load(addr));
+        cycles = (cycles + cycles_add) | 0;
+        cycles = (cycles + 4) | 0;
+        return cycles;
+    },
+    function op3E(this_) {
+        var cycles = 0;
+        var addr = this_.peekWord(this_.reg_pc);
+        addr = (addr + this_.reg_x) & 0xFFFF;
+        this_.reg_pc = (this_.reg_pc + 2) & 0xFFFF;
+        var tmp1 = this_.load(addr);
+        this_.store(addr, this_._setNz(((tmp1 << 1) | this_.flag_c) & 0xFF));
+        this_.flag_c = tmp1 >> 7;
+        cycles = (cycles + 6) | 0;
+        return cycles;
+    },
+    function op3F(this_) {
+        return 0;
+    },
+    function op40(this_) {
+        var cycles = 0;
+        this_.setRegPs(this_._pop());
+        this_.reg_pc = (this_._pop() | (this_._pop() << 8));
+        cycles = (cycles + 6) | 0;
+        return cycles;
+    },
+    function op41(this_) {
+        var cycles = 0;
+        var addr = this_.peekWord((this_.peekByte(this_.reg_pc) + this_.reg_x) & 0xFF);
+        this_.reg_pc = (this_.reg_pc + 1) & 0xFFFF;
+        this_._setNz(this_.reg_a ^= this_.load(addr));
+        cycles = (cycles + 6) | 0;
+        return cycles;
+    },
+    function op42(this_) {
+        return 0;
+    },
+    function op43(this_) {
+        return 0;
+    },
+    function op44(this_) {
+        return 0;
+    },
+    function op45(this_) {
+        var cycles = 0;
+        var addr = this_.peekByte(this_.reg_pc);
+        this_.reg_pc = (this_.reg_pc + 1) & 0xFFFF;
+        this_._setNz(this_.reg_a ^= this_.load(addr));
+        cycles = (cycles + 3) | 0;
+        return cycles;
+    },
+    function op46(this_) {
+        var cycles = 0;
+        var addr = this_.peekByte(this_.reg_pc);
+        this_.reg_pc = (this_.reg_pc + 1) & 0xFFFF;
+        var tmp1 = this_.load(addr);
+        this_.flag_c = tmp1 & 0x01;
+        tmp1 >>= 1;
+        this_.flag_n = 0;
+        this_.flag_z = !tmp1 | 0;
+        this_.store(addr, tmp1);
+        cycles = (cycles + 5) | 0;
+        return cycles;
+    },
+    function op47(this_) {
+        return 0;
+    },
+    function op48(this_) {
+        var cycles = 0;
+        this_._push(this_.reg_a);
+        cycles = (cycles + 3) | 0;
+        return cycles;
+    },
+    function op49(this_) {
+        var cycles = 0;
+        var addr = this_.reg_pc;
+        this_.reg_pc = (this_.reg_pc + 1) & 0xFFFF;
+        this_._setNz(this_.reg_a ^= this_.load(addr));
+        cycles = (cycles + 2) | 0;
+        return cycles;
+    },
+    function op4A(this_) {
+        var cycles = 0;
+        this_.flag_c = this_.reg_a & 0x01;
+        this_._setNz(this_.reg_a >>= 1);
+        cycles = (cycles + 2) | 0;
+        return cycles;
+    },
+    function op4B(this_) {
+        return 0;
+    },
+    function op4C(this_) {
+        var cycles = 0;
+        var addr = this_.peekWord(this_.reg_pc);
+        this_.reg_pc = (this_.reg_pc + 2) & 0xFFFF;
+        this_.reg_pc = addr;
+        cycles = (cycles + 3) | 0;
+        return cycles;
+    },
+    function op4D(this_) {
+        var cycles = 0;
+        var addr = this_.peekWord(this_.reg_pc);
+        this_.reg_pc = (this_.reg_pc + 2) & 0xFFFF;
+        this_._setNz(this_.reg_a ^= this_.load(addr));
+        cycles = (cycles + 4) | 0;
+        return cycles;
+    },
+    function op4E(this_) {
+        var cycles = 0;
+        var addr = this_.peekWord(this_.reg_pc);
+        this_.reg_pc = (this_.reg_pc + 2) & 0xFFFF;
+        var tmp1 = this_.load(addr);
+        this_.flag_c = tmp1 & 0x01;
+        tmp1 >>= 1;
+        this_.flag_n = 0;
+        this_.flag_z = !tmp1 | 0;
+        this_.store(addr, tmp1);
+        cycles = (cycles + 6) | 0;
+        return cycles;
+    },
+    function op4F(this_) {
+        return 0;
+    },
+    function op50(this_) {
+        var cycles = 0;
+        var addr = this_.peekByte(this_.reg_pc);
+        this_.reg_pc = (this_.reg_pc + 1) & 0xFFFF;
+        addr = (this_.reg_pc + addr - ((addr & 0x80) << 1)) & 0xFFFF;
+        if (!this_.flag_v) {
+            cycles = (cycles + ((this_.reg_pc ^ addr) & 0xFF00 ? 1 : 2)) | 0;
+            this_.reg_pc = addr;
+        }
+        cycles = (cycles + 2) | 0;
+        return cycles;
+    },
+    function op51(this_) {
+        var cycles = 0;
+        var cycles_add = 0;
+        var addr = this_.peekWord(this_.peekByte(this_.reg_pc));
+        cycles_add = ((addr & 0xFF) + this_.reg_y) & 0xFF00 ? 1 : 0;
+        addr = (addr + this_.reg_y) & 0xFFFF;
+        this_.reg_pc = (this_.reg_pc + 1) & 0xFFFF;
+        this_._setNz(this_.reg_a ^= this_.load(addr));
+        cycles = (cycles + 5) | 0;
+        return cycles;
+    },
+    function op52(this_) {
+        return 0;
+    },
+    function op53(this_) {
+        return 0;
+    },
+    function op54(this_) {
+        return 0;
+    },
+    function op55(this_) {
+        var cycles = 0;
+        var addr = (this_.peekByte(this_.reg_pc) + this_.reg_x) & 0xFF;
+        this_.reg_pc = (this_.reg_pc + 1) & 0xFFFF;
+        this_._setNz(this_.reg_a ^= this_.load(addr));
+        cycles = (cycles + 4) | 0;
+        return cycles;
+    },
+    function op56(this_) {
+        var cycles = 0;
+        var addr = (this_.peekByte(this_.reg_pc) + this_.reg_x) & 0xFF;
+        this_.reg_pc = (this_.reg_pc + 1) & 0xFFFF;
+        var tmp1 = this_.load(addr);
+        this_.flag_c = tmp1 & 0x01;
+        tmp1 >>= 1;
+        this_.flag_n = 0;
+        this_.flag_z = !tmp1 | 0;
+        this_.store(addr, tmp1);
+        cycles = (cycles + 6) | 0;
+        return cycles;
+    },
+    function op57(this_) {
+        return 0;
+    },
+    function op58(this_) {
+        var cycles = 0;
+        this_.flag_i = 0;
+        cycles = (cycles + 2) | 0;
+        return cycles;
+    },
+    function op59(this_) {
+        var cycles = 0;
+        var cycles_add = 0;
+        var addr = this_.peekWord(this_.reg_pc);
+        cycles_add = ((addr & 0xFF) + this_.reg_y) & 0xFF00 ? 1 : 0;
+        addr = (addr + this_.reg_y) & 0xFFFF;
+        this_.reg_pc = (this_.reg_pc + 2) & 0xFFFF;
+        this_._setNz(this_.reg_a ^= this_.load(addr));
+        cycles = (cycles + 4) | 0;
+        return cycles;
+    },
+    function op5A(this_) {
+        return 0;
+    },
+    function op5B(this_) {
+        return 0;
+    },
+    function op5C(this_) {
+        return 0;
+    },
+    function op5D(this_) {
+        var cycles = 0;
+        var cycles_add = 0;
+        var addr = this_.peekWord(this_.reg_pc);
+        cycles_add = ((addr & 0xFF) + this_.reg_x) & 0xFF00 ? 1 : 0;
+        addr = (addr + this_.reg_x) & 0xFFFF;
+        this_.reg_pc = (this_.reg_pc + 2) & 0xFFFF;
+        this_._setNz(this_.reg_a ^= this_.load(addr));
+        cycles = (cycles + 4) | 0;
+        return cycles;
+    },
+    function op5E(this_) {
+        var cycles = 0;
+        var addr = this_.peekWord(this_.reg_pc);
+        addr = (addr + this_.reg_x) & 0xFFFF;
+        this_.reg_pc = (this_.reg_pc + 2) & 0xFFFF;
+        var tmp1 = this_.load(addr);
+        this_.flag_c = tmp1 & 0x01;
+        tmp1 >>= 1;
+        this_.flag_n = 0;
+        this_.flag_z = !tmp1 | 0;
+        this_.store(addr, tmp1);
+        cycles = (cycles + 6) | 0;
+        return cycles;
+    },
+    function op5F(this_) {
+        return 0;
+    },
+    function op60(this_) {
+        var cycles = 0;
+        this_.reg_pc = ((this_._pop() | (this_._pop() << 8)) + 1) & 0xFFFF;
+        cycles = (cycles + 6) | 0;
+        return cycles;
+    },
+    function op61(this_) {
+        var cycles = 0;
+        var addr = this_.peekWord((this_.peekByte(this_.reg_pc) + this_.reg_x) & 0xFF);
+        this_.reg_pc = (this_.reg_pc + 1) & 0xFFFF;
+        var tmp1 = this_.load(addr);
+        var tmp2 = (this_.reg_a + tmp1 + this_.flag_c) | 0;
+        this_.flag_c = (tmp2 > 0xFF) | 0;
+        this_.flag_v = ((this_.reg_a ^ tmp1 ^ 0x80) & (this_.reg_a ^ tmp2) & 0x80) >> 7;
+        this_._setNz(this_.reg_a = tmp2 & 0xFF);
+        cycles = (cycles + 6) | 0;
+        return cycles;
+    },
+    function op62(this_) {
+        return 0;
+    },
+    function op63(this_) {
+        return 0;
+    },
+    function op64(this_) {
+        return 0;
+    },
+    function op65(this_) {
+        var cycles = 0;
+        var addr = this_.peekByte(this_.reg_pc);
+        this_.reg_pc = (this_.reg_pc + 1) & 0xFFFF;
+        var tmp1 = this_.load(addr);
+        var tmp2 = (this_.reg_a + tmp1 + this_.flag_c) | 0;
+        this_.flag_c = (tmp2 > 0xFF) | 0;
+        this_.flag_v = ((this_.reg_a ^ tmp1 ^ 0x80) & (this_.reg_a ^ tmp2) & 0x80) >> 7;
+        this_._setNz(this_.reg_a = tmp2 & 0xFF);
+        cycles = (cycles + 3) | 0;
+        return cycles;
+    },
+    function op66(this_) {
+        var cycles = 0;
+        var addr = this_.peekByte(this_.reg_pc);
+        this_.reg_pc = (this_.reg_pc + 1) & 0xFFFF;
+        var tmp1 = this_.load(addr);
+        this_.store(addr, this_._setNz((tmp1 >> 1) | (this_.flag_c << 7)));
+        this_.flag_c = tmp1 & 0x01;
+        cycles = (cycles + 5) | 0;
+        return cycles;
+    },
+    function op67(this_) {
+        return 0;
+    },
+    function op68(this_) {
+        var cycles = 0;
+        this_._setNz(this_.reg_a = this_._pop());
+        cycles = (cycles + 4) | 0;
+        return cycles;
+    },
+    function op69(this_) {
+        var cycles = 0;
+        var addr = this_.reg_pc;
+        this_.reg_pc = (this_.reg_pc + 1) & 0xFFFF;
+        var tmp1 = this_.load(addr);
+        var tmp2 = (this_.reg_a + tmp1 + this_.flag_c) | 0;
+        this_.flag_c = (tmp2 > 0xFF) | 0;
+        this_.flag_v = ((this_.reg_a ^ tmp1 ^ 0x80) & (this_.reg_a ^ tmp2) & 0x80) >> 7;
+        this_._setNz(this_.reg_a = tmp2 & 0xFF);
+        cycles = (cycles + 2) | 0;
+        return cycles;
+    },
+    function op6A(this_) {
+        var cycles = 0;
+        var tmp1 = this_.flag_c;
+        this_.flag_c = this_.reg_a & 0x01;
+        this_._setNz(this_.reg_a = (this_.reg_a >> 1) | (tmp1 << 7));
+        cycles = (cycles + 2) | 0;
+        return cycles;
+    },
+    function op6B(this_) {
+        return 0;
+    },
+    function op6C(this_) {
+        var cycles = 0;
+        var addr = this_.peekWord(this_.peekWord(this_.reg_pc));
+        this_.reg_pc = (this_.reg_pc + 2) & 0xFFFF;
+        this_.reg_pc = addr;
+        cycles = (cycles + 6) | 0;
+        return cycles;
+    },
+    function op6D(this_) {
+        var cycles = 0;
+        var addr = this_.peekWord(this_.reg_pc);
+        this_.reg_pc = (this_.reg_pc + 2) & 0xFFFF;
+        var tmp1 = this_.load(addr);
+        var tmp2 = (this_.reg_a + tmp1 + this_.flag_c) | 0;
+        this_.flag_c = (tmp2 > 0xFF) | 0;
+        this_.flag_v = ((this_.reg_a ^ tmp1 ^ 0x80) & (this_.reg_a ^ tmp2) & 0x80) >> 7;
+        this_._setNz(this_.reg_a = tmp2 & 0xFF);
+        cycles = (cycles + 4) | 0;
+        return cycles;
+    },
+    function op6E(this_) {
+        var cycles = 0;
+        var addr = this_.peekWord(this_.reg_pc);
+        this_.reg_pc = (this_.reg_pc + 2) & 0xFFFF;
+        var tmp1 = this_.load(addr);
+        this_.store(addr, this_._setNz((tmp1 >> 1) | (this_.flag_c << 7)));
+        this_.flag_c = tmp1 & 0x01;
+        cycles = (cycles + 6) | 0;
+        return cycles;
+    },
+    function op6F(this_) {
+        return 0;
+    },
+    function op70(this_) {
+        var cycles = 0;
+        var addr = this_.peekByte(this_.reg_pc);
+        this_.reg_pc = (this_.reg_pc + 1) & 0xFFFF;
+        addr = (this_.reg_pc + addr - ((addr & 0x80) << 1)) & 0xFFFF;
+        if (this_.flag_v) {
+            cycles = (cycles + ((this_.reg_pc ^ addr) & 0xFF00 ? 1 : 2)) | 0;
+            this_.reg_pc = addr;
+        }
+        cycles = (cycles + 2) | 0;
+        return cycles;
+    },
+    function op71(this_) {
+        var cycles = 0;
+        var cycles_add = 0;
+        var addr = this_.peekWord(this_.peekByte(this_.reg_pc));
+        cycles_add = ((addr & 0xFF) + this_.reg_y) & 0xFF00 ? 1 : 0;
+        addr = (addr + this_.reg_y) & 0xFFFF;
+        this_.reg_pc = (this_.reg_pc + 1) & 0xFFFF;
+        var tmp1 = this_.load(addr);
+        var tmp2 = (this_.reg_a + tmp1 + this_.flag_c) | 0;
+        this_.flag_c = (tmp2 > 0xFF) | 0;
+        this_.flag_v = ((this_.reg_a ^ tmp1 ^ 0x80) & (this_.reg_a ^ tmp2) & 0x80) >> 7;
+        this_._setNz(this_.reg_a = tmp2 & 0xFF);
+        cycles = (cycles + cycles_add) | 0;
+        cycles = (cycles + 5) | 0;
+        return cycles;
+    },
+    function op72(this_) {
+        return 0;
+    },
+    function op73(this_) {
+        return 0;
+    },
+    function op74(this_) {
+        return 0;
+    },
+    function op75(this_) {
+        var cycles = 0;
+        var addr = (this_.peekByte(this_.reg_pc) + this_.reg_x) & 0xFF;
+        this_.reg_pc = (this_.reg_pc + 1) & 0xFFFF;
+        var tmp1 = this_.load(addr);
+        var tmp2 = (this_.reg_a + tmp1 + this_.flag_c) | 0;
+        this_.flag_c = (tmp2 > 0xFF) | 0;
+        this_.flag_v = ((this_.reg_a ^ tmp1 ^ 0x80) & (this_.reg_a ^ tmp2) & 0x80) >> 7;
+        this_._setNz(this_.reg_a = tmp2 & 0xFF);
+        cycles = (cycles + 4) | 0;
+        return cycles;
+    },
+    function op76(this_) {
+        var cycles = 0;
+        var addr = (this_.peekByte(this_.reg_pc) + this_.reg_x) & 0xFF;
+        this_.reg_pc = (this_.reg_pc + 1) & 0xFFFF;
+        var tmp1 = this_.load(addr);
+        this_.store(addr, this_._setNz((tmp1 >> 1) | (this_.flag_c << 7)));
+        this_.flag_c = tmp1 & 0x01;
+        cycles = (cycles + 6) | 0;
+        return cycles;
+    },
+    function op77(this_) {
+        return 0;
+    },
+    function op78(this_) {
+        var cycles = 0;
+        this_.flag_i = 1;
+        cycles = (cycles + 2) | 0;
+        return cycles;
+    },
+    function op79(this_) {
+        var cycles = 0;
+        var cycles_add = 0;
+        var addr = this_.peekWord(this_.reg_pc);
+        cycles_add = ((addr & 0xFF) + this_.reg_y) & 0xFF00 ? 1 : 0;
+        addr = (addr + this_.reg_y) & 0xFFFF;
+        this_.reg_pc = (this_.reg_pc + 2) & 0xFFFF;
+        var tmp1 = this_.load(addr);
+        var tmp2 = (this_.reg_a + tmp1 + this_.flag_c) | 0;
+        this_.flag_c = (tmp2 > 0xFF) | 0;
+        this_.flag_v = ((this_.reg_a ^ tmp1 ^ 0x80) & (this_.reg_a ^ tmp2) & 0x80) >> 7;
+        this_._setNz(this_.reg_a = tmp2 & 0xFF);
+        cycles = (cycles + cycles_add) | 0;
+        cycles = (cycles + 4) | 0;
+        return cycles;
+    },
+    function op7A(this_) {
+        return 0;
+    },
+    function op7B(this_) {
+        return 0;
+    },
+    function op7C(this_) {
+        return 0;
+    },
+    function op7D(this_) {
+        var cycles = 0;
+        var cycles_add = 0;
+        var addr = this_.peekWord(this_.reg_pc);
+        cycles_add = ((addr & 0xFF) + this_.reg_x) & 0xFF00 ? 1 : 0;
+        addr = (addr + this_.reg_x) & 0xFFFF;
+        this_.reg_pc = (this_.reg_pc + 2) & 0xFFFF;
+        var tmp1 = this_.load(addr);
+        var tmp2 = (this_.reg_a + tmp1 + this_.flag_c) | 0;
+        this_.flag_c = (tmp2 > 0xFF) | 0;
+        this_.flag_v = ((this_.reg_a ^ tmp1 ^ 0x80) & (this_.reg_a ^ tmp2) & 0x80) >> 7;
+        this_._setNz(this_.reg_a = tmp2 & 0xFF);
+        cycles = (cycles + cycles_add) | 0;
+        cycles = (cycles + 4) | 0;
+        return cycles;
+    },
+    function op7E(this_) {
+        var cycles = 0;
+        var addr = this_.peekWord(this_.reg_pc);
+        addr = (addr + this_.reg_x) & 0xFFFF;
+        this_.reg_pc = (this_.reg_pc + 2) & 0xFFFF;
+        var tmp1 = this_.load(addr);
+        this_.store(addr, this_._setNz((tmp1 >> 1) | (this_.flag_c << 7)));
+        this_.flag_c = tmp1 & 0x01;
+        cycles = (cycles + 6) | 0;
+        return cycles;
+    },
+    function op7F(this_) {
+        return 0;
+    },
+    function op80(this_) {
+        return 0;
+    },
+    function op81(this_) {
+        var cycles = 0;
+        var addr = this_.peekWord((this_.peekByte(this_.reg_pc) + this_.reg_x) & 0xFF);
+        this_.reg_pc = (this_.reg_pc + 1) & 0xFFFF;
+        this_.store(addr, this_.reg_a);
+        cycles = (cycles + 6) | 0;
+        return cycles;
+    },
+    function op82(this_) {
+        return 0;
+    },
+    function op83(this_) {
+        return 0;
+    },
+    function op84(this_) {
+        var cycles = 0;
+        var addr = this_.peekByte(this_.reg_pc);
+        this_.reg_pc = (this_.reg_pc + 1) & 0xFFFF;
+        this_.store(addr, this_.reg_y);
+        cycles = (cycles + 3) | 0;
+        return cycles;
+    },
+    function op85(this_) {
+        var cycles = 0;
+        var addr = this_.peekByte(this_.reg_pc);
+        this_.reg_pc = (this_.reg_pc + 1) & 0xFFFF;
+        this_.store(addr, this_.reg_a);
+        cycles = (cycles + 3) | 0;
+        return cycles;
+    },
+    function op86(this_) {
+        var cycles = 0;
+        var addr = this_.peekByte(this_.reg_pc);
+        this_.reg_pc = (this_.reg_pc + 1) & 0xFFFF;
+        this_.store(addr, this_.reg_x);
+        cycles = (cycles + 3) | 0;
+        return cycles;
+    },
+    function op87(this_) {
+        return 0;
+    },
+    function op88(this_) {
+        var cycles = 0;
+        this_._setNz(this_.reg_y = (this_.reg_y - 1) & 0xFF);
+        cycles = (cycles + 2) | 0;
+        return cycles;
+    },
+    function op89(this_) {
+        return 0;
+    },
+    function op8A(this_) {
+        var cycles = 0;
+        this_._setNz(this_.reg_a = this_.reg_x);
+        cycles = (cycles + 2) | 0;
+        return cycles;
+    },
+    function op8B(this_) {
+        return 0;
+    },
+    function op8C(this_) {
+        var cycles = 0;
+        var addr = this_.peekWord(this_.reg_pc);
+        this_.reg_pc = (this_.reg_pc + 2) & 0xFFFF;
+        this_.store(addr, this_.reg_y);
+        cycles = (cycles + 4) | 0;
+        return cycles;
+    },
+    function op8D(this_) {
+        var cycles = 0;
+        var addr = this_.peekWord(this_.reg_pc);
+        this_.reg_pc = (this_.reg_pc + 2) & 0xFFFF;
+        this_.store(addr, this_.reg_a);
+        cycles = (cycles + 4) | 0;
+        return cycles;
+    },
+    function op8E(this_) {
+        var cycles = 0;
+        var addr = this_.peekWord(this_.reg_pc);
+        this_.reg_pc = (this_.reg_pc + 2) & 0xFFFF;
+        this_.store(addr, this_.reg_x);
+        cycles = (cycles + 4) | 0;
+        return cycles;
+    },
+    function op8F(this_) {
+        return 0;
+    },
+    function op90(this_) {
+        var cycles = 0;
+        var addr = this_.peekByte(this_.reg_pc);
+        this_.reg_pc = (this_.reg_pc + 1) & 0xFFFF;
+        addr = (this_.reg_pc + addr - ((addr & 0x80) << 1)) & 0xFFFF;
+        if (!this_.flag_c) {
+            cycles = (cycles + ((this_.reg_pc ^ addr) & 0xFF00 ? 1 : 2)) | 0;
+            this_.reg_pc = addr;
+        }
+        cycles = (cycles + 2) | 0;
+        return cycles;
+    },
+    function op91(this_) {
+        var cycles = 0;
+        var addr = this_.peekWord(this_.peekByte(this_.reg_pc));
+        addr = (addr + this_.reg_y) & 0xFFFF;
+        this_.reg_pc = (this_.reg_pc + 1) & 0xFFFF;
+        this_.store(addr, this_.reg_a);
+        cycles = (cycles + 6) | 0;
+        return cycles;
+    },
+    function op92(this_) {
+        return 0;
+    },
+    function op93(this_) {
+        return 0;
+    },
+    function op94(this_) {
+        var cycles = 0;
+        var addr = (this_.peekByte(this_.reg_pc) + this_.reg_x) & 0xFF;
+        this_.reg_pc = (this_.reg_pc + 1) & 0xFFFF;
+        this_.store(addr, this_.reg_y);
+        cycles = (cycles + 4) | 0;
+        return cycles;
+    },
+    function op95(this_) {
+        var cycles = 0;
+        var addr = (this_.peekByte(this_.reg_pc) + this_.reg_x) & 0xFF;
+        this_.reg_pc = (this_.reg_pc + 1) & 0xFFFF;
+        this_.store(addr, this_.reg_a);
+        cycles = (cycles + 4) | 0;
+        return cycles;
+    },
+    function op96(this_) {
+        var cycles = 0;
+        var addr = (this_.peekByte(this_.reg_pc) + this_.reg_y) & 0xFF;
+        this_.reg_pc = (this_.reg_pc + 1) & 0xFFFF;
+        this_.store(addr, this_.reg_x);
+        cycles = (cycles + 4) | 0;
+        return cycles;
+    },
+    function op97(this_) {
+        return 0;
+    },
+    function op98(this_) {
+        var cycles = 0;
+        this_._setNz(this_.reg_a = this_.reg_y);
+        cycles = (cycles + 2) | 0;
+        return cycles;
+    },
+    function op99(this_) {
+        var cycles = 0;
+        var addr = this_.peekWord(this_.reg_pc);
+        addr = (addr + this_.reg_y) & 0xFFFF;
+        this_.reg_pc = (this_.reg_pc + 2) & 0xFFFF;
+        this_.store(addr, this_.reg_a);
+        cycles = (cycles + 5) | 0;
+        return cycles;
+    },
+    function op9A(this_) {
+        var cycles = 0;
+        this_.reg_sp_ = this_.reg_x;
+        cycles = (cycles + 2) | 0;
+        return cycles;
+    },
+    function op9B(this_) {
+        return 0;
+    },
+    function op9C(this_) {
+        return 0;
+    },
+    function op9D(this_) {
+        var cycles = 0;
+        var addr = this_.peekWord(this_.reg_pc);
+        addr = (addr + this_.reg_x) & 0xFFFF;
+        this_.reg_pc = (this_.reg_pc + 2) & 0xFFFF;
+        this_.store(addr, this_.reg_a);
+        cycles = (cycles + 5) | 0;
+        return cycles;
+    },
+    function op9E(this_) {
+        return 0;
+    },
+    function op9F(this_) {
+        return 0;
+    },
+    function opA0(this_) {
+        var cycles = 0;
+        var addr = this_.reg_pc;
+        this_.reg_pc = (this_.reg_pc + 1) & 0xFFFF;
+        this_._setNz(this_.reg_y = this_.load(addr));
+        cycles = (cycles + 2) | 0;
+        return cycles;
+    },
+    function opA1(this_) {
+        var cycles = 0;
+        var addr = this_.peekWord((this_.peekByte(this_.reg_pc) + this_.reg_x) & 0xFF);
+        this_.reg_pc = (this_.reg_pc + 1) & 0xFFFF;
+        this_._setNz(this_.reg_a = this_.load(addr));
+        cycles = (cycles + 6) | 0;
+        return cycles;
+    },
+    function opA2(this_) {
+        var cycles = 0;
+        var addr = this_.reg_pc;
+        this_.reg_pc = (this_.reg_pc + 1) & 0xFFFF;
+        this_._setNz(this_.reg_x = this_.load(addr));
+        cycles = (cycles + 2) | 0;
+        return cycles;
+    },
+    function opA3(this_) {
+        return 0;
+    },
+    function opA4(this_) {
+        var cycles = 0;
+        var addr = this_.peekByte(this_.reg_pc);
+        this_.reg_pc = (this_.reg_pc + 1) & 0xFFFF;
+        this_._setNz(this_.reg_y = this_.load(addr));
+        cycles = (cycles + 3) | 0;
+        return cycles;
+    },
+    function opA5(this_) {
+        var cycles = 0;
+        var addr = this_.peekByte(this_.reg_pc);
+        this_.reg_pc = (this_.reg_pc + 1) & 0xFFFF;
+        this_._setNz(this_.reg_a = this_.load(addr));
+        cycles = (cycles + 3) | 0;
+        return cycles;
+    },
+    function opA6(this_) {
+        var cycles = 0;
+        var addr = this_.peekByte(this_.reg_pc);
+        this_.reg_pc = (this_.reg_pc + 1) & 0xFFFF;
+        this_._setNz(this_.reg_x = this_.load(addr));
+        cycles = (cycles + 3) | 0;
+        return cycles;
+    },
+    function opA7(this_) {
+        return 0;
+    },
+    function opA8(this_) {
+        var cycles = 0;
+        this_._setNz(this_.reg_y = this_.reg_a);
+        cycles = (cycles + 2) | 0;
+        return cycles;
+    },
+    function opA9(this_) {
+        var cycles = 0;
+        var addr = this_.reg_pc;
+        this_.reg_pc = (this_.reg_pc + 1) & 0xFFFF;
+        this_._setNz(this_.reg_a = this_.load(addr));
+        cycles = (cycles + 2) | 0;
+        return cycles;
+    },
+    function opAA(this_) {
+        var cycles = 0;
+        this_._setNz(this_.reg_x = this_.reg_a);
+        cycles = (cycles + 2) | 0;
+        return cycles;
+    },
+    function opAB(this_) {
+        return 0;
+    },
+    function opAC(this_) {
+        var cycles = 0;
+        var addr = this_.peekWord(this_.reg_pc);
+        this_.reg_pc = (this_.reg_pc + 2) & 0xFFFF;
+        this_._setNz(this_.reg_y = this_.load(addr));
+        cycles = (cycles + 4) | 0;
+        return cycles;
+    },
+    function opAD(this_) {
+        var cycles = 0;
+        var addr = this_.peekWord(this_.reg_pc);
+        this_.reg_pc = (this_.reg_pc + 2) & 0xFFFF;
+        this_._setNz(this_.reg_a = this_.load(addr));
+        cycles = (cycles + 4) | 0;
+        return cycles;
+    },
+    function opAE(this_) {
+        var cycles = 0;
+        var addr = this_.peekWord(this_.reg_pc);
+        this_.reg_pc = (this_.reg_pc + 2) & 0xFFFF;
+        this_._setNz(this_.reg_x = this_.load(addr));
+        cycles = (cycles + 4) | 0;
+        return cycles;
+    },
+    function opAF(this_) {
+        return 0;
+    },
+    function opB0(this_) {
+        var cycles = 0;
+        var addr = this_.peekByte(this_.reg_pc);
+        this_.reg_pc = (this_.reg_pc + 1) & 0xFFFF;
+        addr = (this_.reg_pc + addr - ((addr & 0x80) << 1)) & 0xFFFF;
+        if (this_.flag_c) {
+            cycles = (cycles + ((this_.reg_pc ^ addr) & 0xFF00 ? 1 : 2)) | 0;
+            this_.reg_pc = addr;
+        }
+        cycles = (cycles + 2) | 0;
+        return cycles;
+    },
+    function opB1(this_) {
+        var cycles = 0;
+        var cycles_add = 0;
+        var addr = this_.peekWord(this_.peekByte(this_.reg_pc));
+        cycles_add = ((addr & 0xFF) + this_.reg_y) & 0xFF00 ? 1 : 0;
+        addr = (addr + this_.reg_y) & 0xFFFF;
+        this_.reg_pc = (this_.reg_pc + 1) & 0xFFFF;
+        this_._setNz(this_.reg_a = this_.load(addr));
+        cycles = (cycles + 5) | 0;
+        return cycles;
+    },
+    function opB2(this_) {
+        return 0;
+    },
+    function opB3(this_) {
+        return 0;
+    },
+    function opB4(this_) {
+        var cycles = 0;
+        var addr = (this_.peekByte(this_.reg_pc) + this_.reg_x) & 0xFF;
+        this_.reg_pc = (this_.reg_pc + 1) & 0xFFFF;
+        this_._setNz(this_.reg_y = this_.load(addr));
+        cycles = (cycles + 4) | 0;
+        return cycles;
+    },
+    function opB5(this_) {
+        var cycles = 0;
+        var addr = (this_.peekByte(this_.reg_pc) + this_.reg_x) & 0xFF;
+        this_.reg_pc = (this_.reg_pc + 1) & 0xFFFF;
+        this_._setNz(this_.reg_a = this_.load(addr));
+        cycles = (cycles + 4) | 0;
+        return cycles;
+    },
+    function opB6(this_) {
+        var cycles = 0;
+        var addr = (this_.peekByte(this_.reg_pc) + this_.reg_y) & 0xFF;
+        this_.reg_pc = (this_.reg_pc + 1) & 0xFFFF;
+        this_._setNz(this_.reg_x = this_.load(addr));
+        cycles = (cycles + 4) | 0;
+        return cycles;
+    },
+    function opB7(this_) {
+        return 0;
+    },
+    function opB8(this_) {
+        var cycles = 0;
+        this_.flag_v = 0;
+        cycles = (cycles + 2) | 0;
+        return cycles;
+    },
+    function opB9(this_) {
+        var cycles = 0;
+        var cycles_add = 0;
+        var addr = this_.peekWord(this_.reg_pc);
+        cycles_add = ((addr & 0xFF) + this_.reg_y) & 0xFF00 ? 1 : 0;
+        addr = (addr + this_.reg_y) & 0xFFFF;
+        this_.reg_pc = (this_.reg_pc + 2) & 0xFFFF;
+        this_._setNz(this_.reg_a = this_.load(addr));
+        cycles = (cycles + 4) | 0;
+        return cycles;
+    },
+    function opBA(this_) {
+        var cycles = 0;
+        this_._setNz(this_.reg_x = this_.reg_sp_);
+        cycles = (cycles + 2) | 0;
+        return cycles;
+    },
+    function opBB(this_) {
+        return 0;
+    },
+    function opBC(this_) {
+        var cycles = 0;
+        var cycles_add = 0;
+        var addr = this_.peekWord(this_.reg_pc);
+        cycles_add = ((addr & 0xFF) + this_.reg_x) & 0xFF00 ? 1 : 0;
+        addr = (addr + this_.reg_x) & 0xFFFF;
+        this_.reg_pc = (this_.reg_pc + 2) & 0xFFFF;
+        this_._setNz(this_.reg_y = this_.load(addr));
+        cycles = (cycles + 4) | 0;
+        return cycles;
+    },
+    function opBD(this_) {
+        var cycles = 0;
+        var cycles_add = 0;
+        var addr = this_.peekWord(this_.reg_pc);
+        cycles_add = ((addr & 0xFF) + this_.reg_x) & 0xFF00 ? 1 : 0;
+        addr = (addr + this_.reg_x) & 0xFFFF;
+        this_.reg_pc = (this_.reg_pc + 2) & 0xFFFF;
+        this_._setNz(this_.reg_a = this_.load(addr));
+        cycles = (cycles + 4) | 0;
+        return cycles;
+    },
+    function opBE(this_) {
+        var cycles = 0;
+        var cycles_add = 0;
+        var addr = this_.peekWord(this_.reg_pc);
+        cycles_add = ((addr & 0xFF) + this_.reg_y) & 0xFF00 ? 1 : 0;
+        addr = (addr + this_.reg_y) & 0xFFFF;
+        this_.reg_pc = (this_.reg_pc + 2) & 0xFFFF;
+        this_._setNz(this_.reg_x = this_.load(addr));
+        cycles = (cycles + 4) | 0;
+        return cycles;
+    },
+    function opBF(this_) {
+        return 0;
+    },
+    function opC0(this_) {
+        var cycles = 0;
+        var addr = this_.reg_pc;
+        this_.reg_pc = (this_.reg_pc + 1) & 0xFFFF;
+        var tmp1 = this_.reg_y - this_.load(addr);
+        this_.flag_c = (tmp1 >= 0) | 0;
+        this_._setNz(tmp1);
+        cycles = (cycles + 2) | 0;
+        return cycles;
+    },
+    function opC1(this_) {
+        var cycles = 0;
+        var addr = this_.peekWord((this_.peekByte(this_.reg_pc) + this_.reg_x) & 0xFF);
+        this_.reg_pc = (this_.reg_pc + 1) & 0xFFFF;
+        var tmp1 = this_.reg_a - this_.load(addr);
+        this_.flag_c = (tmp1 >= 0) | 0;
+        this_._setNz(tmp1);
+        cycles = (cycles + 6) | 0;
+        return cycles;
+    },
+    function opC2(this_) {
+        return 0;
+    },
+    function opC3(this_) {
+        return 0;
+    },
+    function opC4(this_) {
+        var cycles = 0;
+        var addr = this_.peekByte(this_.reg_pc);
+        this_.reg_pc = (this_.reg_pc + 1) & 0xFFFF;
+        var tmp1 = this_.reg_y - this_.load(addr);
+        this_.flag_c = (tmp1 >= 0) | 0;
+        this_._setNz(tmp1);
+        cycles = (cycles + 3) | 0;
+        return cycles;
+    },
+    function opC5(this_) {
+        var cycles = 0;
+        var addr = this_.peekByte(this_.reg_pc);
+        this_.reg_pc = (this_.reg_pc + 1) & 0xFFFF;
+        var tmp1 = this_.reg_a - this_.load(addr);
+        this_.flag_c = (tmp1 >= 0) | 0;
+        this_._setNz(tmp1);
+        cycles = (cycles + 3) | 0;
+        return cycles;
+    },
+    function opC6(this_) {
+        var cycles = 0;
+        var addr = this_.peekByte(this_.reg_pc);
+        this_.reg_pc = (this_.reg_pc + 1) & 0xFFFF;
+        this_.store(addr, this_._setNz((this_.load(addr) - 1) & 0xFF));
+        cycles = (cycles + 5) | 0;
+        return cycles;
+    },
+    function opC7(this_) {
+        return 0;
+    },
+    function opC8(this_) {
+        var cycles = 0;
+        this_._setNz(this_.reg_y = (this_.reg_y + 1) & 0xFF);
+        cycles = (cycles + 2) | 0;
+        return cycles;
+    },
+    function opC9(this_) {
+        var cycles = 0;
+        var addr = this_.reg_pc;
+        this_.reg_pc = (this_.reg_pc + 1) & 0xFFFF;
+        var tmp1 = this_.reg_a - this_.load(addr);
+        this_.flag_c = (tmp1 >= 0) | 0;
+        this_._setNz(tmp1);
+        cycles = (cycles + 2) | 0;
+        return cycles;
+    },
+    function opCA(this_) {
+        var cycles = 0;
+        this_._setNz(this_.reg_x = (this_.reg_x - 1) & 0xFF);
+        cycles = (cycles + 2) | 0;
+        return cycles;
+    },
+    function opCB(this_) {
+        return 0;
+    },
+    function opCC(this_) {
+        var cycles = 0;
+        var addr = this_.peekWord(this_.reg_pc);
+        this_.reg_pc = (this_.reg_pc + 2) & 0xFFFF;
+        var tmp1 = this_.reg_y - this_.load(addr);
+        this_.flag_c = (tmp1 >= 0) | 0;
+        this_._setNz(tmp1);
+        cycles = (cycles + 4) | 0;
+        return cycles;
+    },
+    function opCD(this_) {
+        var cycles = 0;
+        var addr = this_.peekWord(this_.reg_pc);
+        this_.reg_pc = (this_.reg_pc + 2) & 0xFFFF;
+        var tmp1 = this_.reg_a - this_.load(addr);
+        this_.flag_c = (tmp1 >= 0) | 0;
+        this_._setNz(tmp1);
+        cycles = (cycles + 4) | 0;
+        return cycles;
+    },
+    function opCE(this_) {
+        var cycles = 0;
+        var addr = this_.peekWord(this_.reg_pc);
+        this_.reg_pc = (this_.reg_pc + 2) & 0xFFFF;
+        this_.store(addr, this_._setNz((this_.load(addr) - 1) & 0xFF));
+        cycles = (cycles + 6) | 0;
+        return cycles;
+    },
+    function opCF(this_) {
+        return 0;
+    },
+    function opD0(this_) {
+        var cycles = 0;
+        var addr = this_.peekByte(this_.reg_pc);
+        this_.reg_pc = (this_.reg_pc + 1) & 0xFFFF;
+        addr = (this_.reg_pc + addr - ((addr & 0x80) << 1)) & 0xFFFF;
+        if (!this_.flag_z) {
+            cycles = (cycles + ((this_.reg_pc ^ addr) & 0xFF00 ? 1 : 2)) | 0;
+            this_.reg_pc = addr;
+        }
+        cycles = (cycles + 2) | 0;
+        return cycles;
+    },
+    function opD1(this_) {
+        var cycles = 0;
+        var cycles_add = 0;
+        var addr = this_.peekWord(this_.peekByte(this_.reg_pc));
+        cycles_add = ((addr & 0xFF) + this_.reg_y) & 0xFF00 ? 1 : 0;
+        addr = (addr + this_.reg_y) & 0xFFFF;
+        this_.reg_pc = (this_.reg_pc + 1) & 0xFFFF;
+        var tmp1 = this_.reg_a - this_.load(addr);
+        this_.flag_c = (tmp1 >= 0) | 0;
+        this_._setNz(tmp1);
+        cycles = (cycles + 5) | 0;
+        return cycles;
+    },
+    function opD2(this_) {
+        return 0;
+    },
+    function opD3(this_) {
+        return 0;
+    },
+    function opD4(this_) {
+        return 0;
+    },
+    function opD5(this_) {
+        var cycles = 0;
+        var addr = (this_.peekByte(this_.reg_pc) + this_.reg_x) & 0xFF;
+        this_.reg_pc = (this_.reg_pc + 1) & 0xFFFF;
+        var tmp1 = this_.reg_a - this_.load(addr);
+        this_.flag_c = (tmp1 >= 0) | 0;
+        this_._setNz(tmp1);
+        cycles = (cycles + 4) | 0;
+        return cycles;
+    },
+    function opD6(this_) {
+        var cycles = 0;
+        var addr = (this_.peekByte(this_.reg_pc) + this_.reg_x) & 0xFF;
+        this_.reg_pc = (this_.reg_pc + 1) & 0xFFFF;
+        this_.store(addr, this_._setNz((this_.load(addr) - 1) & 0xFF));
+        cycles = (cycles + 6) | 0;
+        return cycles;
+    },
+    function opD7(this_) {
+        return 0;
+    },
+    function opD8(this_) {
+        var cycles = 0;
+        this_.flag_d = 0;
+        cycles = (cycles + 2) | 0;
+        return cycles;
+    },
+    function opD9(this_) {
+        var cycles = 0;
+        var cycles_add = 0;
+        var addr = this_.peekWord(this_.reg_pc);
+        cycles_add = ((addr & 0xFF) + this_.reg_y) & 0xFF00 ? 1 : 0;
+        addr = (addr + this_.reg_y) & 0xFFFF;
+        this_.reg_pc = (this_.reg_pc + 2) & 0xFFFF;
+        var tmp1 = this_.reg_a - this_.load(addr);
+        this_.flag_c = (tmp1 >= 0) | 0;
+        this_._setNz(tmp1);
+        cycles = (cycles + 4) | 0;
+        return cycles;
+    },
+    function opDA(this_) {
+        return 0;
+    },
+    function opDB(this_) {
+        return 0;
+    },
+    function opDC(this_) {
+        return 0;
+    },
+    function opDD(this_) {
+        var cycles = 0;
+        var cycles_add = 0;
+        var addr = this_.peekWord(this_.reg_pc);
+        cycles_add = ((addr & 0xFF) + this_.reg_x) & 0xFF00 ? 1 : 0;
+        addr = (addr + this_.reg_x) & 0xFFFF;
+        this_.reg_pc = (this_.reg_pc + 2) & 0xFFFF;
+        var tmp1 = this_.reg_a - this_.load(addr);
+        this_.flag_c = (tmp1 >= 0) | 0;
+        this_._setNz(tmp1);
+        cycles = (cycles + 4) | 0;
+        return cycles;
+    },
+    function opDE(this_) {
+        var cycles = 0;
+        var addr = this_.peekWord(this_.reg_pc);
+        addr = (addr + this_.reg_x) & 0xFFFF;
+        this_.reg_pc = (this_.reg_pc + 2) & 0xFFFF;
+        this_.store(addr, this_._setNz((this_.load(addr) - 1) & 0xFF));
+        cycles = (cycles + 6) | 0;
+        return cycles;
+    },
+    function opDF(this_) {
+        return 0;
+    },
+    function opE0(this_) {
+        var cycles = 0;
+        var addr = this_.reg_pc;
+        this_.reg_pc = (this_.reg_pc + 1) & 0xFFFF;
+        var tmp1 = this_.reg_x - this_.load(addr);
+        this_.flag_c = (tmp1 >= 0) | 0;
+        this_._setNz(tmp1);
+        cycles = (cycles + 2) | 0;
+        return cycles;
+    },
+    function opE1(this_) {
+        var cycles = 0;
+        var addr = this_.peekWord((this_.peekByte(this_.reg_pc) + this_.reg_x) & 0xFF);
+        this_.reg_pc = (this_.reg_pc + 1) & 0xFFFF;
+        var tmp1 = this_.load(addr);
+        var tmp2 = (this_.reg_a - tmp1 + this_.flag_c - 1) | 0;
+        this_.flag_c = (tmp2 >= 0) | 0;
+        this_.flag_v = ((this_.reg_a ^ tmp1) & (this_.reg_a ^ tmp2) & 0x80) >> 7;
+        this_._setNz(this_.reg_a = tmp2 & 0xFF);
+        cycles = (cycles + 6) | 0;
+        return cycles;
+    },
+    function opE2(this_) {
+        return 0;
+    },
+    function opE3(this_) {
+        return 0;
+    },
+    function opE4(this_) {
+        var cycles = 0;
+        var addr = this_.peekByte(this_.reg_pc);
+        this_.reg_pc = (this_.reg_pc + 1) & 0xFFFF;
+        var tmp1 = this_.reg_x - this_.load(addr);
+        this_.flag_c = (tmp1 >= 0) | 0;
+        this_._setNz(tmp1);
+        cycles = (cycles + 3) | 0;
+        return cycles;
+    },
+    function opE5(this_) {
+        var cycles = 0;
+        var addr = this_.peekByte(this_.reg_pc);
+        this_.reg_pc = (this_.reg_pc + 1) & 0xFFFF;
+        var tmp1 = this_.load(addr);
+        var tmp2 = (this_.reg_a - tmp1 + this_.flag_c - 1) | 0;
+        this_.flag_c = (tmp2 >= 0) | 0;
+        this_.flag_v = ((this_.reg_a ^ tmp1) & (this_.reg_a ^ tmp2) & 0x80) >> 7;
+        this_._setNz(this_.reg_a = tmp2 & 0xFF);
+        cycles = (cycles + 3) | 0;
+        return cycles;
+    },
+    function opE6(this_) {
+        var cycles = 0;
+        var addr = this_.peekByte(this_.reg_pc);
+        this_.reg_pc = (this_.reg_pc + 1) & 0xFFFF;
+        this_.store(addr, this_._setNz((this_.load(addr) + 1) & 0xFF));
+        cycles = (cycles + 5) | 0;
+        return cycles;
+    },
+    function opE7(this_) {
+        return 0;
+    },
+    function opE8(this_) {
+        var cycles = 0;
+        this_._setNz(this_.reg_x = (this_.reg_x + 1) & 0xFF);
+        cycles = (cycles + 2) | 0;
+        return cycles;
+    },
+    function opE9(this_) {
+        var cycles = 0;
+        var addr = this_.reg_pc;
+        this_.reg_pc = (this_.reg_pc + 1) & 0xFFFF;
+        var tmp1 = this_.load(addr);
+        var tmp2 = (this_.reg_a - tmp1 + this_.flag_c - 1) | 0;
+        this_.flag_c = (tmp2 >= 0) | 0;
+        this_.flag_v = ((this_.reg_a ^ tmp1) & (this_.reg_a ^ tmp2) & 0x80) >> 7;
+        this_._setNz(this_.reg_a = tmp2 & 0xFF);
+        cycles = (cycles + 2) | 0;
+        return cycles;
+    },
+    function opEA(this_) {
+        var cycles = 0;
+        cycles = (cycles + 2) | 0;
+        return cycles;
+    },
+    function opEB(this_) {
+        return 0;
+    },
+    function opEC(this_) {
+        var cycles = 0;
+        var addr = this_.peekWord(this_.reg_pc);
+        this_.reg_pc = (this_.reg_pc + 2) & 0xFFFF;
+        var tmp1 = this_.reg_x - this_.load(addr);
+        this_.flag_c = (tmp1 >= 0) | 0;
+        this_._setNz(tmp1);
+        cycles = (cycles + 4) | 0;
+        return cycles;
+    },
+    function opED(this_) {
+        var cycles = 0;
+        var addr = this_.peekWord(this_.reg_pc);
+        this_.reg_pc = (this_.reg_pc + 2) & 0xFFFF;
+        var tmp1 = this_.load(addr);
+        var tmp2 = (this_.reg_a - tmp1 + this_.flag_c - 1) | 0;
+        this_.flag_c = (tmp2 >= 0) | 0;
+        this_.flag_v = ((this_.reg_a ^ tmp1) & (this_.reg_a ^ tmp2) & 0x80) >> 7;
+        this_._setNz(this_.reg_a = tmp2 & 0xFF);
+        cycles = (cycles + 4) | 0;
+        return cycles;
+    },
+    function opEE(this_) {
+        var cycles = 0;
+        var addr = this_.peekWord(this_.reg_pc);
+        this_.reg_pc = (this_.reg_pc + 2) & 0xFFFF;
+        this_.store(addr, this_._setNz((this_.load(addr) + 1) & 0xFF));
+        cycles = (cycles + 6) | 0;
+        return cycles;
+    },
+    function opEF(this_) {
+        return 0;
+    },
+    function opF0(this_) {
+        var cycles = 0;
+        var addr = this_.peekByte(this_.reg_pc);
+        this_.reg_pc = (this_.reg_pc + 1) & 0xFFFF;
+        addr = (this_.reg_pc + addr - ((addr & 0x80) << 1)) & 0xFFFF;
+        if (this_.flag_z) {
+            cycles = (cycles + ((this_.reg_pc ^ addr) & 0xFF00 ? 1 : 2)) | 0;
+            this_.reg_pc = addr;
+        }
+        cycles = (cycles + 2) | 0;
+        return cycles;
+    },
+    function opF1(this_) {
+        var cycles = 0;
+        var cycles_add = 0;
+        var addr = this_.peekWord(this_.peekByte(this_.reg_pc));
+        cycles_add = ((addr & 0xFF) + this_.reg_y) & 0xFF00 ? 1 : 0;
+        addr = (addr + this_.reg_y) & 0xFFFF;
+        this_.reg_pc = (this_.reg_pc + 1) & 0xFFFF;
+        var tmp1 = this_.load(addr);
+        var tmp2 = (this_.reg_a - tmp1 + this_.flag_c - 1) | 0;
+        this_.flag_c = (tmp2 >= 0) | 0;
+        this_.flag_v = ((this_.reg_a ^ tmp1) & (this_.reg_a ^ tmp2) & 0x80) >> 7;
+        this_._setNz(this_.reg_a = tmp2 & 0xFF);
+        cycles = (cycles + cycles_add) | 0;
+        cycles = (cycles + 5) | 0;
+        return cycles;
+    },
+    function opF2(this_) {
+        return 0;
+    },
+    function opF3(this_) {
+        return 0;
+    },
+    function opF4(this_) {
+        return 0;
+    },
+    function opF5(this_) {
+        var cycles = 0;
+        var addr = (this_.peekByte(this_.reg_pc) + this_.reg_x) & 0xFF;
+        this_.reg_pc = (this_.reg_pc + 1) & 0xFFFF;
+        var tmp1 = this_.load(addr);
+        var tmp2 = (this_.reg_a - tmp1 + this_.flag_c - 1) | 0;
+        this_.flag_c = (tmp2 >= 0) | 0;
+        this_.flag_v = ((this_.reg_a ^ tmp1) & (this_.reg_a ^ tmp2) & 0x80) >> 7;
+        this_._setNz(this_.reg_a = tmp2 & 0xFF);
+        cycles = (cycles + 4) | 0;
+        return cycles;
+    },
+    function opF6(this_) {
+        var cycles = 0;
+        var addr = (this_.peekByte(this_.reg_pc) + this_.reg_x) & 0xFF;
+        this_.reg_pc = (this_.reg_pc + 1) & 0xFFFF;
+        this_.store(addr, this_._setNz((this_.load(addr) + 1) & 0xFF));
+        cycles = (cycles + 6) | 0;
+        return cycles;
+    },
+    function opF7(this_) {
+        return 0;
+    },
+    function opF8(this_) {
+        var cycles = 0;
+        this_.flag_d = 1;
+        cycles = (cycles + 2) | 0;
+        return cycles;
+    },
+    function opF9(this_) {
+        var cycles = 0;
+        var cycles_add = 0;
+        var addr = this_.peekWord(this_.reg_pc);
+        cycles_add = ((addr & 0xFF) + this_.reg_y) & 0xFF00 ? 1 : 0;
+        addr = (addr + this_.reg_y) & 0xFFFF;
+        this_.reg_pc = (this_.reg_pc + 2) & 0xFFFF;
+        var tmp1 = this_.load(addr);
+        var tmp2 = (this_.reg_a - tmp1 + this_.flag_c - 1) | 0;
+        this_.flag_c = (tmp2 >= 0) | 0;
+        this_.flag_v = ((this_.reg_a ^ tmp1) & (this_.reg_a ^ tmp2) & 0x80) >> 7;
+        this_._setNz(this_.reg_a = tmp2 & 0xFF);
+        cycles = (cycles + cycles_add) | 0;
+        cycles = (cycles + 4) | 0;
+        return cycles;
+    },
+    function opFA(this_) {
+        return 0;
+    },
+    function opFB(this_) {
+        return 0;
+    },
+    function opFC(this_) {
+        return 0;
+    },
+    function opFD(this_) {
+        var cycles = 0;
+        var cycles_add = 0;
+        var addr = this_.peekWord(this_.reg_pc);
+        cycles_add = ((addr & 0xFF) + this_.reg_x) & 0xFF00 ? 1 : 0;
+        addr = (addr + this_.reg_x) & 0xFFFF;
+        this_.reg_pc = (this_.reg_pc + 2) & 0xFFFF;
+        var tmp1 = this_.load(addr);
+        var tmp2 = (this_.reg_a - tmp1 + this_.flag_c - 1) | 0;
+        this_.flag_c = (tmp2 >= 0) | 0;
+        this_.flag_v = ((this_.reg_a ^ tmp1) & (this_.reg_a ^ tmp2) & 0x80) >> 7;
+        this_._setNz(this_.reg_a = tmp2 & 0xFF);
+        cycles = (cycles + cycles_add) | 0;
+        cycles = (cycles + 4) | 0;
+        return cycles;
+    },
+    function opFE(this_) {
+        var cycles = 0;
+        var addr = this_.peekWord(this_.reg_pc);
+        addr = (addr + this_.reg_x) & 0xFFFF;
+        this_.reg_pc = (this_.reg_pc + 2) & 0xFFFF;
+        this_.store(addr, this_._setNz((this_.load(addr) + 1) & 0xFF));
+        cycles = (cycles + 6) | 0;
+        return cycles;
+    },
+    function opFF(this_) {
+        return 0;
+    }
+];
+
+JsWqx.prototype._switchBank = function(bank) {
+    this.memmap[2] = this.pByte(bank, 0, 0x2000);
+    this.memmap[3] = this.pByte(bank, 0x2000, 0x2000);
+    this.memmap[4] = this.pByte(bank, 0x4000, 0x2000);
+    this.memmap[5] = this.pByte(bank, 0x6000, 0x2000);
+};
+
+JsWqx.prototype._get40Pointer = function(idx) {
+    if (idx < 4) {
+        return this.p_io;
+    } else {
+        return this.pByte(this.page0, (idx + 4) << 6, 0x40);
+    }
+};
+
+JsWqx.prototype._fillBBsPages = function(volume) {
+    for (var i = 0; i < 4; i++) {
+        this.bbs_pages[i * 4] = this.pByte(volume[i], 0, 0x2000);
+        this.bbs_pages[i * 4 + 1] = this.pByte(volume[i], 0x2000, 0x2000);
+        this.bbs_pages[i * 4 + 2] = this.pByte(volume[i], 0x4000, 0x2000);
+        this.bbs_pages[i * 4 + 3] = this.pByte(volume[i], 0x6000, 0x2000);
+    }
+    this.bbs_pages[1] = this.page6;
+};
+
+JsWqx.prototype._generateAndPlayJGWav = function() {
+
+};
+
+(function() {
+    function readXX(this_, addr) {
+        return this_.p_io[addr];
+    }
+
+    // clock
+
+    function read3B(this_, addr) {
+        if (!(this_.p_io[0x3D] & 0x03)) {
+            return this_.clock_buff[0x3B] & 0xFE;
+        }
+        return this_.p_io[addr];
+    }
+
+    function read3F(this_, addr) {
+        var idx = this_.p_io[0x3E];
+        if (idx < 80) {
+            return this_.clock_buff[idx];
+        }
+        return this_.p_io[addr];
+    }
+
+    function writeXX(this_, addr, value) {
+        this_.p_io[addr] = value;
+    }
+
+    // switch bank.
+
+    function write00(this_, addr, value) {
+        var old_value = this_.p_io[addr];
+        this_.p_io[addr] = value;
+        if (value !== old_value) {
+            if (value < 0x20) {
+                this_._switchBank(this_.nor_banks[value]);
+            } else if (value >= 0x80) {
+                var volume_idx = this_.p_io[0x0D];
+                if (volume_idx & 0x01) {
+                    this_._switchBank(this_.rom_volume1[value]);
+                } else if (volume_idx & 0x02) {
+                    this_._switchBank(this_.rom_volume2[value]);
+                } else {
+                    this_._switchBank(this_.rom_volume0[value]);
+                }
+            }
         }
     }
 
-    function getByteArray(buffer, byteOffset, byteLength){
-        byteOffset = byteOffset | 0;
-        if (!(buffer instanceof ArrayBuffer)) {
-            byteOffset += buffer.byteOffset;
-            buffer = buffer.buffer;
+    function write06(this_, addr, value) {
+        this_.p_io[addr] = value;
+        if (!this_.p_lcd) {
+            this_.p_lcd = this_.pByte(this_.ram, ((this_.p_io[0x0C] & 0x03) << 12) | (value << 4), 1600);
         }
-        if (byteLength == null) {
-            byteLength = buffer.byteLength - byteOffset;
-        }
-        return new Uint8Array(buffer, byteOffset, byteLength);
+        this_.p_io[0x09] &= 0xFE;
     }
 
-    function Wqx(div, opts){
-        opts = opts || {};
-
-        this._DEBUG = false;
-        this.div = div;
-
-        this.frameCounter = 0;
-        this.nmiCounter = 0;
-        this.clockCounter = 0;
-        this.shouldIrq = false;
-        this.shouldNmi = false;
-        this.frameTimer = null;
-        this.totalInsts = 0;
-
-        this.keypadmatrix = [
-            [0,0,0,0,0,0,0,0],
-            [0,0,0,0,0,0,0,0],
-            [0,0,0,0,0,0,0,0],
-            [0,0,0,0,0,0,0,0],
-            [0,0,0,0,0,0,0,0],
-            [0,0,0,0,0,0,0,0],
-            [0,0,0,0,0,0,0,0],
-            [0,0,0,0,0,0,0,0]
-        ];
-        this.lcdoffshift0flag = 0;
-        this.lcdbuffaddr = null;
-        this.timer0started = false;
-        this.timer0value = 0;
-//        this.timer0waveoutstart = false;
-        this.ptr40 = null;
-        this.zp40cache = null;
-
-        this.rom = null;
-        this.volume0array = [];
-        this.volume1array = [];
-        this.volume2array = [];
-        this.nor = null;
-        this.norbankheader = [];
-        this.ram = null;
-        this.memmap = [];
-        this.bbsbankheader = [];
-        this.may4000ptr = null;
-        this.cpu = null;
-        this.initLcd();
-        this.initRom();
-        this.initNor();
-        this.initRam();
-        this.initMemmap();
-        this.initIo();
-        this.resetCpu();
+    function write08(this_, addr, value) {
+        this_.p_io[addr] = value;
+        this_.p_io[0x0B] &= 0xFE;
     }
 
-    Wqx.prototype.initLcd = function (){
-        var doc = this.div.ownerDocument;
-        var canvas = doc.createElement('canvas');
-        canvas.width = 320;
-        canvas.height = 160;
-        this.div.appendChild(canvas);
-        this.canvas = canvas;
-        this.canvasCtx = canvas.getContext('2d');
-        this.canvasCtx.fillStyle = '#32284A';
-        this.canvasCtx.setTransform(2, 0, 0, 2, 0, 0);
-        this.canvasCtx.save();
-    };
-    Wqx.prototype.initRom = function (){
-        this.rom = new Uint8Array(0x8000 * 768);
-        for (var i=0; i<256; i++) {
-            this.volume0array[i] = getByteArray(this.rom, 0x8000 * i, 0x8000);
-            this.volume1array[i] = getByteArray(this.rom, 0x8000 * (i + 256), 0x8000);
-            this.volume2array[i] = getByteArray(this.rom, 0x8000 * (i + 512), 0x8000);
-        }
-    };
-    Wqx.prototype.initNor = function (){
-        this.nor = new Uint8Array(0x8000 * 32);
-        this.norbankheader = [];
-        for (var i=0; i<32; i++) {
-            this.norbankheader[i] = getByteArray(this.nor, 0x8000 * i, 0x8000);
-        }
-    };
-    Wqx.prototype.initRam = function (){
-        this.ram = new Uint8Array(0x10000);
-        this.ptr40 = getByteArray(this.ram, 0x40, 0x40);
-        this.zp40cache = new Uint8Array(0x40);
-    };
-    Wqx.prototype.initMemmap = function (){
-        this.memmap[map0000] = getByteArray(this.ram, 0, 0x2000);
-        this.ram2000_4000 = getByteArray(this.ram, 0x2000, 0x2000);
-        this.memmap[map2000] = this.ram2000_4000;
-        this.ram4000_6000 = getByteArray(this.ram, 0x4000, 0x2000);
-        this.memmap[map4000] = this.ram4000_6000;
-        this.memmap[map6000] = getByteArray(this.ram, 0x6000, 0x2000);
-        this.memmap[map8000] = getByteArray(this.ram, 0x8000, 0x2000);
-        this.memmap[mapA000] = getByteArray(this.ram, 0xA000, 0x2000);
-        this.memmap[mapC000] = getByteArray(this.ram, 0xC000, 0x2000);
-        this.memmap[mapE000] = getByteArray(this.ram, 0xE000, 0x2000);
-        this.ramNorBank1 = new Uint8Array(0x2000);
-        this.fillC000BIOSBank(this.volume0array);
-        this.memmap[mapC000] = getByteArray(this.bbsbankheader[0], 0, 0x2000);
-        this.may4000ptr = this.volume0array[0];
-        this.memmap[mapE000] = getByteArray(this.volume0array[0], 0x2000, 0x2000);
-        this.switch4000ToBFFF();
-//        this._dbg_logMemmap();
-    };
+    // keypad matrix.
 
-    function hex(num, len){
-        var str = num.toString(16).toUpperCase();
-        return new Array(len - str.length + 1).join('0') + str;
-    }
-    var _dbg_mapNames = ['map0000','map2000','map4000','map6000','map8000','mapA000','mapC000','mapE000'];
-    Wqx.prototype._dbg_ptrName = function (i){
-        var ptr = this.memmap[i];
-        var mapName = _dbg_mapNames[i];
-        if (ptr.buffer === this.rom.buffer) {
-            return mapName + ': ROM[0x' + hex(ptr.byteOffset, 8) + ']';
-        } else if (ptr.buffer === this.nor.buffer) {
-            return mapName + ': NOR[0x' + hex(ptr.byteOffset, 8) + ']';
-        } else {
-            return mapName + ': RAM[0x' + hex(ptr.byteOffset, 8) + ']';
-        }
-    };
-    Wqx.prototype._dbg_logMemmap = function (){
-        var buff = [];
-        for (var i=0; i<_dbg_mapNames.length; i++) {
-            buff.push(this._dbg_ptrName(i));
-        }
-        console.log(buff.join('\n'));
-    };
-
-    Wqx.prototype.fillC000BIOSBank = function (volume_array){
-        this.bbsbankheader[0] = getByteArray(volume_array[0], 0, 0x2000);
-        this.bbsbankheader[1] = this.ramNorBank1;
-        this.bbsbankheader[2] = getByteArray(volume_array[0], 0x4000, 0x2000);
-        this.bbsbankheader[3] = getByteArray(volume_array[0], 0x6000, 0x2000);
-        // 4567, 89AB, CDEF take first 4page 0000~7FFF in BROM
-        for (var i = 0; i < 3; i++) {
-            this.bbsbankheader[i * 4 + 4] = getByteArray(volume_array[i + 1], 0, 0x2000);
-            this.bbsbankheader[i * 4 + 5] = getByteArray(volume_array[i + 1], 0x2000, 0x2000);
-            this.bbsbankheader[i * 4 + 6] = getByteArray(volume_array[i + 1], 0x4000, 0x2000);
-            this.bbsbankheader[i * 4 + 7] = getByteArray(volume_array[i + 1], 0x6000, 0x2000);
-        }
-    };
-    Wqx.prototype.switch4000ToBFFF = function (){
-        this.memmap[map4000] = getByteArray(this.may4000ptr, 0, 0x2000);
-        this.memmap[map6000] = getByteArray(this.may4000ptr, 0x2000, 0x2000);
-        this.memmap[map8000] = getByteArray(this.may4000ptr, 0x4000, 0x2000);
-        this.memmap[mapA000] = getByteArray(this.may4000ptr, 0x6000, 0x2000);
-//        this._dbg_logMemmap();
-    };
-
-    Wqx.prototype.initIo = function (){
-        this.io_read_map = new Array(0x10000);
-        this.io_write_map = new Array(0x10000);
-        for (var i=0; i<0x10000; i++) {
-            this.io_read_map[i] = i < 0x40;
-            this.io_write_map[i] = i < 0x40 || i >= 0x4000;
-        }
-        this.io_read = this.readIO.bind(this);
-        this.io_write = this.writeIO.bind(this);
-        this._eraseBuff = new Uint8Array(256);
-        // bit5 TIMER0 SOURCE CLOCK SELECT BIT1/TIMER CLOCK SELECT BIT2
-        // bit3 TIMER1 SOURCE CLOCK SELECT BIT1/TIMER CLOCK SELECT BIT0
-        // ([0C] & 3) * 1000 || [06] * 10 = LCDAddr
-        this.ram[io0C_timer01_ctrl] = 0x28;
-        this.ram[io1B_pwm_data] = 0;
-        this.ram[io01_int_enable] = 0; // Disable all int
-        this.ram[io04_general_ctrl] = 0;
-        this.ram[io05_clock_ctrl] = 0;
-        this.ram[io08_port0_data] = 0;
-        this.ram[io00_bank_switch] = 0;
-        this.ram[io09_port1_data] = 0;
-    };
-    Wqx.prototype.readIO = function (addr){
-//        console.log('readIO: ' + addr.toString(16) + ' @' + this._instCount);
-        switch (addr) {
-            case 0x00:
-                return this.read00BankSwitch();
+    function write09(this_, addr, value) {
+        this_.p_io[addr] = value;
+        switch (value) {
+            case 0x01:
+                this_.p_io[0x08] = this_.keypad_matrix[0];
+                break;
             case 0x02:
-                return this.read02Timer0Value();
+                this_.p_io[0x08] = this_.keypad_matrix[1];
+                break;
             case 0x04:
-                return this.read04StopTimer0();
-            case 0x05:
-                return this.read05StartTimer0;
-            case 0x06:
-                return this.read06StopTimer1();
-            case 0x07:
-                return this.read07StartTimer1();
-            case 0x3B:
-                return this.read3BUnknown();
-            case 0x3F:
-                return this.read3FClock();
-            default:
-                return this.ram[addr];
-        }
-    };
-    Wqx.prototype.read00BankSwitch = function (){
-//        console.log('read00BankSwitch');
-        return this.ram[io00_bank_switch];
-    };
-    Wqx.prototype.read04StopTimer0 = function (){
-        if (this.timer0started) {
-            this.timer0value = this.read02Timer0Value();
-            this.timer0started = false;
-        }
-//        if (this.timer0waveoutstart) {
-//            this.timer0waveoutstart = false;
-//        }
-//        console.log('read04StopTimer0: ' + this.ram[io04_general_ctrl]);
-        return this.ram[io04_general_ctrl];
-    };
-    Wqx.prototype.read02Timer0Value = function (){
-        if (this.timer0started) {
-            this.timer0value = Math.floor((this.cpu.cycles - this.timer0startcycles) /
-                SPDC1016Frequency) & 0xFF;
-        }
-//        console.log('read02Timer0Value: ' + this.timer0value);
-        return this.timer0value;
-    };
-    Wqx.prototype.read05StartTimer0 = function (){
-        console.log('read05StartTimer0');
-        this.timer0started = true;
-        this.timer0startcycles = this.cpu.cycles;
-//        if (this.read02Timer0Value() == 0x3F) {
-//            //gTimer0WaveoutStarted = 1;
-//            //mayTimer0Var1 = 0;
-//            //maypTimer0VarA8 = (int)&unk_4586A8;
-//            //mayTimer0Var2 = 0;
-//            //mayIO2345Var1 = 0;
-//            //ResetWaveout(&pwh);
-//            //OpenWaveout((DWORD_PTR)&pwh, 0x1F40u);
-//            this.timer0waveoutstart = true;
-//        }
-        return this.ram[io05_clock_ctrl]; // follow rulz by GGV
-    };
-    Wqx.prototype.read06StopTimer1 = function (){
-        console.log('read06StopTimer1');
-        //todo
-        return this.ram[io06_lcd_config];
-    };
-    Wqx.prototype.read07StartTimer1 = function (){
-        console.log('read06StopTimer1');
-    };
-    Wqx.prototype.read3BUnknown = function (){
-        if (!(this.ram[0x3d] & 0x03)) {
-            return 0 & 0xFE; // unknown & 0xFE.
-        }
-    };
-    Wqx.prototype.read3FClock = function (){
-        return this.clockRecords[this.ram[62]] || 0;
-    };
-    Wqx.prototype.writeIO = function (addr, value){
-//        console.log('writeIO: 0x' + addr.toString(16) + ', 0x' + value.toString(16) + ' @' + this._instCount);
-        switch (addr) {
-        case 0x00:
-            return this.write00BankSwitch(value);
-        case 0x02:
-            return this.write02Timer0Value(value);
-        case 0x05:
-            return this.write05ClockCtrl(value);
-        case 0x06:
-            return this.write06LCDStartAddr(value);
-        case 0x08:
-            return this.write08Port0(value);
-        case 0x09:
-            return this.write09Port1(value);
-        case 0x0A:
-            return this.write0AROABBS(value);
-        case 0x0C:
-            return this.writeTimer01Control(value);
-        case 0x0D:
-            return this.write0DVolumeIDLCDSegCtrl(value);
-        case 0x0F:
-            return this.writeZeroPageBankswitch(value);
-        case 0x20:
-            return this.write20JG(value);
-        case 0x23:
-            return this.write23JGWav(value);
-        case 0x3F:
-            return this.write3FClock(value);
-        }
-        if (addr >= 0x4000) {
-            return this.writeGE4000(addr, value);
-        }
-        this.ram[addr] = value;
-    };
-
-    // decompiled.
-    Wqx.prototype.write00BankSwitch = function (bank){
-//        console.log('write00BankSwitch: ' + bank);
-        if (this.ram[io00_bank_switch] !== bank) {
-            if (bank < 0x20) {
-                this.may4000ptr = this.norbankheader[bank];
-            } else if (bank >= 0x80) {
-                if (this.ram[io0D_volumeid] & 0x01) {
-                    this.may4000ptr = this.volume1array[bank];
-                } else if (this.ram[io0D_volumeid] & 0x02) {
-                    this.may4000ptr = this.volume2array[bank];
-                } else {
-                    this.may4000ptr = this.volume0array[bank];
+                this_.p_io[0x08] = this_.keypad_matrix[2];
+                break;
+            case 0x08:
+                this_.p_io[0x08] = this_.keypad_matrix[3];
+                break;
+            case 0x10:
+                this_.p_io[0x08] = this_.keypad_matrix[4];
+                break;
+            case 0x20:
+                this_.p_io[0x08] = this_.keypad_matrix[5];
+                break;
+            case 0x40:
+                this_.p_io[0x08] = this_.keypad_matrix[6];
+                break;
+            case 0x80:
+                this_.p_io[0x08] = this_.keypad_matrix[7];
+                break;
+            case 0:
+                this_.p_io[0x0B] |= 1;
+                if (this_.keypad_matrix[7] == 0xFE) {
+                    this_.p_io[0x0B] &= 0xFE;
                 }
-            }
-            this.switch4000ToBFFF();
-            this.ram[io00_bank_switch] = bank;
+                break;
+            case 0x7F:
+                if (this_.p_io[0x15] == 0x7F) {
+                    this_.p_io[0x08] = (
+                        this_.keypad_matrix[0] |
+                        this_.keypad_matrix[1] |
+                        this_.keypad_matrix[2] |
+                        this_.keypad_matrix[3] |
+                        this_.keypad_matrix[4] |
+                        this_.keypad_matrix[5] |
+                        this_.keypad_matrix[6] |
+                        this_.keypad_matrix[7]);
+                }
+                break;
         }
-    };
-    Wqx.prototype.write02Timer0Value = function (value){
-//        console.log('write02Timer0Value: ' + value);
-        if (this.timer0started) {
-            this.timer0startcycles = (this.cpu.cycles -
-                (value * SPDC1016Frequency / 10));
-        } else {
-            this.timer0value = value;
-        }
-    };
-    Wqx.prototype.write05ClockCtrl = function (value){
-//        console.log('write05ClockCtrl: ' + value);
-        // FROM WQXSIM
-        // SPDC1016
-        if (this.ram[io05_clock_ctrl] & 0x08) {
-            // old bit3, LCDON
-            if ((value & 0x0F) === 0) {
-                // new bit0~bit3 is 0
-                this.lcdoffshift0flag = true;
-            }
-        }
-        this.ram[io05_clock_ctrl] = value;
-    };
-    Wqx.prototype.write06LCDStartAddr = function (value){
-        console.log('write06LCDStartAddr: ' + value);
-        if (this.lcdbuffaddr == null) {
-            this.lcdbuffaddr = ((this.ram[io0C_lcd_config] & 0x03) << 12) | (value << 4);
-            console.log('lcdAddr: ' + this.lcdbuffaddr);
-        }
-        this.ram[io06_lcd_config] = value;
-        // SPDC1016
-        // don't know how wqxsim works.
-        this.ram[io09_port1_data] &= 0xFE; // remove bit0 of port1 (keypad)
-    };
-    Wqx.prototype.write08Port0 = function (value){
-        this.ram[io0B_port3_data] &= 0xFE;
-    };
-    function buildByte(array){
-        return (array[0]) |
-            (array[1] << 1) |
-            (array[2] << 2) |
-            (array[3] << 3) |
-            (array[4] << 4) |
-            (array[5] << 5) |
-            (array[6] << 6) |
-            (array[7] << 7);
     }
-    Wqx.prototype.write09Port1 = function (value){
-        switch (value){
-        case 0x01: this.ram[io08_port0_data] = buildByte(this.keypadmatrix[0]); break;
-        case 0x02: this.ram[io08_port0_data] = buildByte(this.keypadmatrix[1]); break;
-        case 0x04: this.ram[io08_port0_data] = buildByte(this.keypadmatrix[2]); break;
-        case 0x08: this.ram[io08_port0_data] = buildByte(this.keypadmatrix[3]); break;
-        case 0x10: this.ram[io08_port0_data] = buildByte(this.keypadmatrix[4]); break;
-        case 0x20: this.ram[io08_port0_data] = buildByte(this.keypadmatrix[5]); break;
-        case 0x40: this.ram[io08_port0_data] = buildByte(this.keypadmatrix[6]); break;
-        case 0x80: this.ram[io08_port0_data] = buildByte(this.keypadmatrix[7]); break;
-        case 0:
-            this.ram[io0B_port3_data] |= 1;
-            if (this.keypadmatrix[7] === 0xFE) {
-                this.ram[io0B_port3_data] &= 0xFE;
-            }
-            break;
-        case 0x7F:
-            if (this.ram[io15_port1_dir] === 0x7F) {
-                this.ram[io08_port0_data] = (
-                    buildByte(this.keypadmatrix[0]) |
-                    buildByte(this.keypadmatrix[1]) |
-                    buildByte(this.keypadmatrix[2]) |
-                    buildByte(this.keypadmatrix[3]) |
-                    buildByte(this.keypadmatrix[4]) |
-                    buildByte(this.keypadmatrix[5]) |
-                    buildByte(this.keypadmatrix[6]) |
-                    buildByte(this.keypadmatrix[7])
-                    );
-                break;
-            }
-        }
-        this.ram[io09_port1_data] = value;
-    };
-    Wqx.prototype.write0AROABBS = function (value){
-//        console.log('write0AROABBS: ' + value);
-        if (value !== this.ram[io0A_roa]) {
-            this.memmap[mapC000] = getByteArray(this.bbsbankheader[value & 0x0F], 0, 0x2000);
-            this.ram[io0A_roa] = value;
-        }
-    };
-    Wqx.prototype.writeTimer01Control = function (value){
-//        console.log('writeTimer01Control: ' + value);
-        if (this.lcdbuffaddr === null) {
-            this.lcdbuffaddr = ((value & 0x03) << 12) | (this.ram[io06_lcd_config] << 4);
-            console.log('lcdAddr: ' + this.lcdbuffaddr);
-        }
-        this.ram[io0C_lcd_config] = value;
-    };
 
-    // decompiled.
-    Wqx.prototype.write0DVolumeIDLCDSegCtrl = function (value){
-//        console.log('write0DVolumeIDLCDSegCtrl: ' + value);
-        if (value !== this.ram[io0D_volumeid]) {
-            // bit0 changed.
-            // volume1,3 != volume0,2
-            var bank = this.ram[io00_bank_switch];
-            if ((value & 0x03) === 1) {
-                // Volume1
-                this.fillC000BIOSBank(this.volume1array);
-                this.may4000ptr = this.volume1array[bank];
-                this.memmap[mapE000] = getByteArray(this.volume1array[0], 0x2000, 0x2000);
-            } else if ((value & 0x03) === 3) {
-                // Volume2
-                this.fillC000BIOSBank(this.volume2array);
-                this.may4000ptr = this.volume2array[bank];
-                this.memmap[mapE000] = getByteArray(this.volume2array[0], 0x2000, 0x2000);
-            } else {
-                // Volume0
-                this.fillC000BIOSBank(this.volume0array);
-                this.may4000ptr = this.volume0array[bank];
-                this.memmap[mapE000] = getByteArray(this.volume0array[0], 0x2000, 0x2000);
-            }
+    // roabbs
 
-            this.memmap[map2000] = this.ram2000_4000;
-            var roabbs = this.ram[io0A_roa];
-            if (!(roabbs & 0x04)) {
-                this.memmap[map2000] = this.ram2000_4000;
-            }
-            this.memmap[mapC000] = this.bbsbankheader[roabbs & 0x0F];
-            this.switch4000ToBFFF();
+    function write0A(this_, addr, value) {
+        var old_value = this_.p_io[addr];
+        this_.p_io[addr] = value;
+        if (value !== old_value) {
+            this_.memmap[6] = this_.bbs_pages[value & 0x0F];
         }
-        this.ram[io0D_volumeid] = value;
-//        this._dbg_logMemmap();
-    };
-    Wqx.prototype.writeZeroPageBankswitch = function (value){
-//        console.log('writeZeroPageBankswitch: ' + value);
-        var oldzpbank = this.ram[io0F_zp_bsw] & 0x07;
-        var newzpbank = (value & 0x07);
-        var newzpptr = this.getZeroPagePointer(newzpbank);
-        if (oldzpbank !== newzpbank) {
-            if (oldzpbank === 0) {
-                // oldzpbank == 0
-                memcpy(this.zp40cache, this.ptr40, 0x40); // backup fixed 40~80 to cache
-                memcpy(this.ptr40, newzpptr, 0x40); // copy newbank to 40
+    }
+
+    // switch volume
+
+    function write0D(this_, addr, value) {
+        var old_value = this_.p_io[addr];
+        this_.p_io[addr] = value;
+        if (value !== old_value) {
+            var bank_idx = this_.p_io[0x00];
+            var volume = (value & 0x03 === 1 ? this_.rom_volume1 :
+                value & 0x03 === 3 ? this_.rom_volume2 : this_.rom_volume0);
+            this_._fillBBsPages(volume);
+            this_.memmap[7] = this_.pByte(volume[0], 0x2000, 0x2000);
+            var roa_bbs = this_.p_io[0x0A];
+            this_.memmap[1] = (roa_bbs & 0x04 ? this_.page2 : this_.page1);
+            this_.memmap[6] = this_.bbs_pages[roa_bbs & 0x0F];
+            this_._switchBank(volume[bank_idx]);
+        }
+    }
+
+    // zp40 switch
+
+    function write0F(this_, addr, value) {
+        var old_value = this_.p_io[addr];
+        this_.p_io[addr] = value;
+        old_value &= 0x07;
+        value &= 0x07;
+        if (value !== old_value) {
+            var ptr_new = this_._get40Pointer(value);
+            if (old_value) {
+                this_.memcpy(this_._get40Pointer(old_value), this_.p_40, 0x40);
+                this_.memcpy(this_.p_40, value ? ptr_new : this_.bak_40, 0x40);
             } else {
-                // dangerous if exchange 00 <-> 40
-                // oldaddr maybe 0 or 200~300
-                var oldzpptr = this.getZeroPagePointer(oldzpbank);
-                memcpy(oldzpptr, this.ptr40, 0x40);
-                if (newzpbank !== 0) {
-                    memcpy(this.ptr40, newzpptr, 0x40);
-                } else {
-                    memcpy(this.ptr40, this.zp40cache, 0x40); // copy backup to 40
-                }
+                this_.memcpy(this_.bak_40, this_.p_40, 0x40);
+                this_.memcpy(this_.p_40, ptr_new, 0x40);
             }
         }
-        this.ram[io0F_zp_bsw] = value;
-    };
-    Wqx.prototype.getZeroPagePointer = function (bank){
-        //.text:0040BFD0 bank            = byte ptr  4
-        //.text:0040BFD0
-        //.text:0040BFD0                 mov     al, [esp+bank]
-        //.text:0040BFD4                 cmp     al, 4
-        //.text:0040BFD6                 jnb     short loc_40BFE5 ; if (bank < 4) {
-        //.text:0040BFD8                 xor     eax, eax        ; bank == 0,1,2,3
-        //.text:0040BFD8                                         ; set bank = 0
-        //.text:0040BFDA                 and     eax, 0FFFFh     ; WORD(bank)
-        //.text:0040BFDF                 add     eax, offset gFixedRAM0 ; result = &gFixedRAM0[WORD(bank)];
-        //.text:0040BFE4                 retn                    ; }
-        //.text:0040BFE5 ; ---------------------------------------------------------------------------
-        //.text:0040BFE5
-        //.text:0040BFE5 loc_40BFE5:                             ; CODE XREF: GetZeroPagePointer+6j
-        //.text:0040BFE5                 movzx   ax, al          ; 4,5,6,7
-        //.text:0040BFE9                 add     eax, 4          ; bank+=4
-        //.text:0040BFEC                 shl     eax, 6          ; bank *= 40;
-        //.text:0040BFEF                 and     eax, 0FFFFh     ; WORD(bank)
-        //.text:0040BFF4                 add     eax, offset gFixedRAM0
-        //.text:0040BFF9                 retn
-        if (bank >= 4) {
-            // 4,5,6,7
-            // 4 -> 200 5-> 240
-            return getByteArray(this.ram, (bank + 4) << 6, 0x40);
-        } else {
-            // 0,1,2,3
-            return getByteArray(this.ram, 0, 0x40);
-        }
-    };
-    Wqx.prototype.write20JG = function (value){
-//        console.log('write20JG');
-        this.ram[io20_JG] = value;
+    }
+
+    function write20(this_, addr, value) {
+        this_.p_io[addr] = value;
         if (value === 0x80 || value === 0x40) {
-            // todo:
-            this.ram[io20_JG] = 0;
+            this_.memset(this_.jg_wav_buff, 0, 0x20);
+            this_.p_io[0x20] = 0;
+            this_.jg_wav_flags = 1;
+            this_.jg_wav_idx = 0;
         }
-    };
+    }
 
-    Wqx.prototype.write23JGWav = function (value){
-//        console.log('write23JGWav');
-        this.ram[io23_unknow] = value;
+    function write23(this_, addr, value) {
+        this_.p_io[addr] = value;
         if (value === 0xC2) {
-            // gMayJGBuff2[(unsigned __int8)gMayJGIndex] = gZeroPage[34];
+            this_.jg_wav_buff[this_.jg_wav_idx] = this_.p_io[0x22];
         } else if (value === 0xC4) {
-
+            if (this_.jg_wav_idx < 0x20) {
+                this_.jg_wav_buff[this_.jg_wav_idx] = this_.p_io[0x22];
+                this_.jg_wav_idx++;
+            }
         } else if (value === 0x80) {
-            this.ram[io20_JG] = 0x80;
-            // todo:
+            this_.p_io[0x20] = 0x80;
+            this_.p_io[0x20] = 0x80;
+            this_.jg_wav_flags = 0;
+            if (this_.jg_wav_idx) {
+                if (!this_.jg_wav_playing) {
+                    this_._generateAndPlayJGWav();
+                    this_.jg_wav_idx = 0;
+                }
+            }
         }
-    };
-    Wqx.prototype.write3FClock = function (value){
-        if (this.ram[62] >= 0x07) {
-            if (this.ram[62] === 0x0B) {
-                this.ram[61] = 0xF8;
-                this.mayClockFlags1 |= value & 0x07;
-                this.clockRecords[0x0B] = value ^ (this.clockRecords[0x0B] ^ value) & 0x7F;
-            } else if (this.ram[62] === 0x0A) {
-                this.clockRecords[0x0A] = value;
-                this.mayClockFlags1 |= value & 0x07;
+        if (this_.jg_wav_playing) {
+            // todo.
+        }
+    }
+
+    // clock.
+
+    function write3F(this_, addr, value) {
+        this_.p_io[addr] = value;
+        var idx = this_.p_io[0x3E];
+        if (idx >= 0x07) {
+            if (idx === 0x0B) {
+                this_.p_io[0x3D] = 0xF8;
+                this_.clock_flags |= value & 0x07;
+                this_.clock_buff[0x0B] = value ^ ((this_.clock_buff[0x0B] ^ value) & 0x7F);
+            } else if (idx === 0x0A) {
+                this_.clock_flags |= value & 0x07;
+                this_.clock_buff[0x0A] = value;
             } else {
-                this.clockRecords[this.ram[62] % 80] = value;
+                this_.clock_buff[idx % 80] = value;
             }
         } else {
-            if (!(this.clockRecords[0x0B]  & 0x80)) {
-                this.clockRecords[this.ram[62]] = value;
+            if (!(this_.clock_buff[0x0B] & 0x80) && idx < 80) {
+                this_.clock_buff[idx] = value;
             }
         }
-        this.ram[0x3F] = value;
-    };
+    }
 
-    Wqx.prototype._eraseStep = 0;
-    Wqx.prototype._eraseType = 0;
-    Wqx.prototype._eraseSelectedBank = 0;
-    Wqx.prototype._eraseTemp1 = 0;
-    Wqx.prototype._eraseTemp2 = 0;
-    Wqx.prototype._eraseBuff = null;
-    Wqx.prototype.writeGE4000 = function (addr, value){
-//        console.log('writeGE4000: ' + addr.toString(16) + ', ' + value.toString(16));
-        var buffer = this.memmap[addr >> 13].buffer;
-        // writable bank.
-        if (buffer === this.ram || buffer === this.ramNorBank1) {
-            this.memmap[addr >> 13][addr & 0x1FFF] = value;
-            return;
-        }
-        if (addr >= 0xE000) {
-            return;
-        }
-        var bank = this.ram[io00_bank_switch];
-        if (bank >= 0x20) {
-            return;
-        }
+    //region JsWqx.prototype.io_read
+    JsWqx.prototype.io_read = [
+        readXX, // 0x00
+        readXX, // 0x01
+        readXX, // 0x02
+        readXX, // 0x03
+        readXX, // 0x04
+        readXX, // 0x05
+        readXX, // 0x06
+        readXX, // 0x07
+        readXX, // 0x08
+        readXX, // 0x09
+        readXX, // 0x0A
+        readXX, // 0x0B
+        readXX, // 0x0C
+        readXX, // 0x0D
+        readXX, // 0x0E
+        readXX, // 0x0F
+        readXX, // 0x10
+        readXX, // 0x11
+        readXX, // 0x12
+        readXX, // 0x13
+        readXX, // 0x14
+        readXX, // 0x15
+        readXX, // 0x16
+        readXX, // 0x17
+        readXX, // 0x18
+        readXX, // 0x19
+        readXX, // 0x1A
+        readXX, // 0x1B
+        readXX, // 0x1C
+        readXX, // 0x1D
+        readXX, // 0x1E
+        readXX, // 0x1F
+        readXX, // 0x20
+        readXX, // 0x21
+        readXX, // 0x22
+        readXX, // 0x23
+        readXX, // 0x24
+        readXX, // 0x25
+        readXX, // 0x26
+        readXX, // 0x27
+        readXX, // 0x28
+        readXX, // 0x29
+        readXX, // 0x2A
+        readXX, // 0x2B
+        readXX, // 0x2C
+        readXX, // 0x2D
+        readXX, // 0x2E
+        readXX, // 0x2F
+        readXX, // 0x30
+        readXX, // 0x31
+        readXX, // 0x32
+        readXX, // 0x33
+        readXX, // 0x34
+        readXX, // 0x35
+        readXX, // 0x36
+        readXX, // 0x37
+        readXX, // 0x38
+        readXX, // 0x39
+        readXX, // 0x3A
+        read3B, // 0x3B
+        readXX, // 0x3C
+        readXX, // 0x3D
+        readXX, // 0x3E
+        read3F // 0x3F
+    ];
+    //endregion io_read
 
-        // ##############
-        // # erasing ....
-        var self = this;
-        function erase_all_nor_banks(){
-            for (var i=32; i--;) {
-                for (var j=0x8000; j--;) {
-                    self.norbankheader[i][j] = 0xFF;
-                }
-            }
-        }
-        function erase_buff(){
-            for (var j=256; j--;) {
-                self._eraseBuff[j] = 0xFF;
-            }
-        }
-        if (this._eraseStep === 0) {
-            if (addr === 0x5555 && value === 0xAA) {
-                this._eraseStep = 1;
-                return;
-            } else if (addr === 0x8000 && value === 0xF0) {
-                return;
-            }
-        } else if (this._eraseStep === 1) {
-            if (addr === 0xAAAA && value === 0x55) {
-                this._eraseStep = 2;
-                return;
-            }
-        } else if (this._eraseStep === 2) {
-            if (addr === 0x5555) {
-                switch (value){
-                case 0x90:
-                    this._eraseSelectedBank = this.ram[io00_bank_switch];
-                    this._eraseTemp1 = this.norbankheader[this._eraseSelectedBank][0x4000];
-                    this._eraseTemp2 = this.norbankheader[this._eraseSelectedBank][0x4001];
-                    this.norbankheader[this._eraseSelectedBank][0x4000] = 0xC7;
-                    this.norbankheader[this._eraseSelectedBank][0x4001] = 0xD5;
-                    this._eraseStep = 3;
-                    this._eraseType = 1;
-                    return;
-                case 0xA0: this._eraseStep = 3; this._eraseType = 2; return;
-                case 0x80: this._eraseStep = 3; this._eraseType = 3; return;
-                case 0xA8: this._eraseStep = 3; this._eraseType = 4; return;
-                case 0x88: this._eraseStep = 3; this._eraseType = 5; return;
-                case 0x78: this._eraseStep = 3; this._eraseType = 6; return;
-                }
-            }
-        } else if (this._eraseStep === 3) {
-            switch (this._eraseType) {
-            case 1:
-                if (value === 0xF0) {
-                    this.norbankheader[this._eraseSelectedBank][0x4000] = this._eraseTemp1;
-                    this.norbankheader[this._eraseSelectedBank][0x4001] = this._eraseTemp2;
-                    this._eraseStep = 0;
-                    this._eraseType = 0;
-                    return;
-                }
-                break;
-            case 2:
-                this.may4000ptr[addr - 0x4000] &= value;
-                this._eraseStep = 4;
-                return;
-            case 4:
-                this._eraseStep = 4;
-                this._eraseBuff[addr % 256] &= value;
-                return;
-            case 3:
-            case 5:
-                if (addr === 0x5555 && value === 0xAA) {
-                    this._eraseStep = 4;
-                    return;
-                }
-                break;
-            }
-        } else if (this._eraseStep === 4) {
-            switch (this._eraseType) {
-            case 3:
-            case 5:
-                if (addr === 0xAAAA && value === 0x55) {
-                    this._eraseStep = 5;
-                    return;
-                }
-                break;
-            }
-        } else if (this._eraseStep === 5) {
-            if (addr === 0x5555 && value === 0x10) {
-                erase_all_nor_banks();
-                this._eraseStep = 6;
-                if (this._eraseType === 5) {
-                    erase_buff();
-                }
-                return;
-            }
-            if (this._eraseType === 3 && value === 0x30) {
-                var k = this.ram[io00_bank_switch];
-                var a = addr - addr % 0x800 - 0x4000;
-                for (var j=0x800; j--;) {
-                    this.norbankheader[k][a + j] = 0xFF;
-                }
-                this._eraseStep = 6;
-                return;
-            }
-            if (this._eraseType === 5 && value === 0x48) {
-                erase_buff();
-                this._eraseStep = 6;
-                return;
-            }
-        }
-        // ????.
-        if (addr === 0x8000 && value === 0xF0) {
-            this._eraseStep = 0;
-            this._eraseType = 0;
-            return;
-        }
-        console.log('error occurs when operate in flash! ' + addr.toString(16) + ',' + value.toString(16));
-    };
-
-    Wqx.prototype.resetCpu = function (){
-        this.cpu = new M65C02Context();
-        this.cpu.ram = this.ram;
-        this.cpu.memmap = this.memmap;
-        this.cpu.io_read_map = this.io_read_map;
-        this.cpu.io_write_map = this.io_write_map;
-        this.cpu.io_read = this.io_read;
-        this.cpu.io_write = this.io_write;
-        this.cpu.cycles = 0;
-        this.cpu.reg_a = 0;
-        this.cpu.reg_x = 0;
-        this.cpu.reg_y = 0;
-        // 00100100 unused P(bit5) = 1, I(bit3) = 1, B(bit4) = 0
-        this.cpu.set_reg_ps(0x24);
-        // assume 1FFC/1FFD in same stripe
-        this.cpu.reg_pc = (this.memmap[7][0x1FFD] << 8) | this.memmap[7][0x1FFC];
-        this.cpu.reg_sp = 0x01FF;
-        this.cpu.irq = 1;
-        this.cpu.nmi = 1;
-        this.cpu.wai = 0;
-        this.cpu.stp = 0;
-    };
-
-    Wqx.prototype.loadBROM = function (buffer){
-        var byteOffset = 0;
-        while (byteOffset < buffer.byteLength) {
-            var bufferSrc1 = getByteArray(buffer, byteOffset, 0x4000);
-            var bufferSrc2 = getByteArray(buffer, byteOffset + 0x4000, 0x4000);
-            var bufferDest1 = getByteArray(this.rom, byteOffset + 0x4000, 0x4000);
-            var bufferDest2 = getByteArray(this.rom, byteOffset, 0x4000);
-            memcpy(bufferDest1, bufferSrc1, 0x4000);
-            memcpy(bufferDest2, bufferSrc2, 0x4000);
-            byteOffset += 0x8000;
-        }
-        this.resetCpu();
-    };
-
-    Wqx.prototype.loadNorFlash = function (buffer){
-        var byteOffset = 0;
-        while (byteOffset < buffer.byteLength) {
-            var bufferSrc1 = getByteArray(buffer, byteOffset, 0x4000);
-            var bufferSrc2 = getByteArray(buffer, byteOffset + 0x4000, 0x4000);
-            var bufferDest1 = getByteArray(this.nor, byteOffset + 0x4000, 0x4000);
-            var bufferDest2 = getByteArray(this.nor, byteOffset, 0x4000);
-            memcpy(bufferDest1, bufferSrc1, 0x4000);
-            memcpy(bufferDest2, bufferSrc2, 0x4000);
-            byteOffset += 0x8000;
-        }
-        this.resetCpu();
-    };
-
-    Wqx.prototype.updateLCD = function (){
-        var lcdBuffer = getByteArray(this.ram, this.lcdbuffaddr, 160*80/8);
-//        var imageData = this.canvasCtx.createImageData(160, 80);
-//        for (var i=0; i<80; i++) {
-//            for (var j=0; j<20; j++) {
-//                var p = (160 * i + 8 * j) * 4;
-//                var pixelsByte = lcdBuffer[20*i+j];
-//                imageData.data[p+3] = (pixelsByte & 0x80) ? 255 : 0;
-//                imageData.data[p+7] = (pixelsByte & 0x40) ? 255 : 0;
-//                imageData.data[p+11] = (pixelsByte & 0x20) ? 255 : 0;
-//                imageData.data[p+15] = (pixelsByte & 0x10) ? 255 : 0;
-//                imageData.data[p+19] = (pixelsByte & 0x08) ? 255 : 0;
-//                imageData.data[p+23] = (pixelsByte & 0x04) ? 255 : 0;
-//                imageData.data[p+27] = (pixelsByte & 0x02) ? 255 : 0;
-//                imageData.data[p+31] = (pixelsByte & 0x01) ? 255 : 0;
-//            }
-//        }
-//        this.canvasCtx.putImageData(imageData, 0, 0);
-        this.canvasCtx.clearRect(0, 0, 160, 80);
-        for (var i=0; i<80; i++) {
-            for (var j=0; j<20; j++) {
-                var p = j * 8;
-                var pixelsByte = lcdBuffer[20*i+j];
-                if (pixelsByte & 0x80) if (j > 0) this.canvasCtx.fillRect(p + 0, i, 1, 1);
-                if (pixelsByte & 0x40) this.canvasCtx.fillRect(p + 1, i, 1, 1);
-                if (pixelsByte & 0x20) this.canvasCtx.fillRect(p + 2, i, 1, 1);
-                if (pixelsByte & 0x10) this.canvasCtx.fillRect(p + 3, i, 1, 1);
-                if (pixelsByte & 0x08) this.canvasCtx.fillRect(p + 4, i, 1, 1);
-                if (pixelsByte & 0x04) this.canvasCtx.fillRect(p + 5, i, 1, 1);
-                if (pixelsByte & 0x02) this.canvasCtx.fillRect(p + 6, i, 1, 1);
-                if (pixelsByte & 0x01) this.canvasCtx.fillRect(p + 7, i, 1, 1);
-            }
-        }
-    };
-
-    Wqx.prototype.mayClockFlags1 = 0;
-    Wqx.prototype.adjustTime = function (){
-        if (++this.clockRecords[0] >= 60) {
-            this.clockRecords[0] = 0;
-            if (++this.clockRecords[1] >= 60) {
-                this.clockRecords[1] = 0;
-                if (++this.clockRecords[2] >= 24) {
-                    this.clockRecords[2] &= 0;
-                    ++this.clockRecords[3];
-                }
-            }
-        }
-    };
-
-    Wqx.prototype.encounterIRQClock = function (){
-        return false;
-    };
-
-    Wqx.prototype.run = function (){
-        this._timerCounter = 0;
-        this._instCount = 0;
-        this.clockRecords = new Uint8Array(80);
-        if (!this.frameTimer) {
-            this.frameTimer = setInterval(this.frame.bind(this),
-                1000 / FrameRate);
-        }
-    };
-
-    Wqx.prototype.stop = function (){
-        clearInterval(this.frameTimer);
-        this.frameTimer = null;
-    };
-
-    Wqx.prototype.reset = function (){
-        this.resetCpu();
-        this.frameCounter = 0;
-        this.nmiCounter = 0;
-    };
-
-    Wqx.prototype.frame = function (){
-        var frameCycles = CyclesPerFrame * (this.frameCounter + 1);
-        var nmiCycles = CyclesPerNMI * (this.nmiCounter + 1);
-        var clockCycles = CyclesPer10Ms * (this.clockCounter + 1);
-        while (this.cpu.cycles < frameCycles) {
-//            if (this._instCount === 2854234) {
-//                debugger;
-//            }
-            if (this._DEBUG &&
-                typeof wqxsimlogs !== 'undefined' &&
-                wqxsimlogs.length > 1) {
-                if (this._instCount >= wqxsimlogs.START &&
-                    this._instCount < wqxsimlogs.START + wqxsimlogs.length - 1) {
-                    var log = wqxsimlogs[this._instCount - wqxsimlogs.START];
-                    var error = '';
-                    if (log.A !== this.cpu.reg_a) {
-                        error += ' A ';
-                    }
-                    if (log.X !== this.cpu.reg_x) {
-                        error += ' X ';
-                    }
-                    if (log.Y !== this.cpu.reg_y) {
-                        error += ' Y ';
-                    }
-                    if (log.PS !== this.cpu.get_reg_ps()) {
-                        error += ' PS ';
-                    }
-                    if (log.SP + 0x100 !== this.cpu.reg_sp) {
-                        error += ' SP ';
-                    }
-                    if (log.PC !== this.cpu.reg_pc) {
-                        error += ' PC ';
-                    }
-                    if (log.OP !== this.memmap[(this.cpu.reg_pc)>>13][(this.cpu.reg_pc)&0x1FFF]) {
-                        error += ' OP ';
-                    }
-//                    if (log.X !== this.ram[0x20]) {
-//                        error += ' X ';
-//                    }
-                    if (error) {
-                        console.log(this._instCount + ': ' + error);
-                        debugger;
-                        this.stop();
-                        return;
-                    }
-                } else if (this._instCount === wqxsimlogs.START + wqxsimlogs.length - 1) {
-                    alert('good!');
-                }
-            }
-            this.cpu.execute();
-            if (this.cpu.cycles >= nmiCycles) {
-                this.nmiCounter++;
-                nmiCycles += CyclesPerNMI;
-                if (!(this.nmiCounter & 0x01)) {
-                    this.adjustTime();
-                }
-                if (!this.encounterIRQClock() || (this.nmiCounter & 0x1)) {
-                    this.ram[0x3D] = 0;
-                } else {
-                    this.ram[0x3D] = 0x20;
-                    this.mayClockFlags &= 0xFD;
-                }
-                this.shouldIrq = true;
-            }
-            if (this.shouldIrq && !this.cpu.flag_i) {
-                this.cpu.irq = 0;
-                this.shouldIrq = false;
-                this.cpu.doIrq();
-            }
-            this._instCount ++;
-            if (this.cpu.cycles >= clockCycles) {
-                this.clockCounter ++;
-                this.clockRecords[4] ++;
-                clockCycles += CyclesPer10Ms;
-                this.ram[io01_int_enable] |= 0x08;
-                this.shouldIrq = true;
-            }
-//            if ((this._instCount - 6000) % 6000 === 0) {
-//                this.clockRecords[4] ++;
-//                this.ram[io01_int_enable] |= 0x08;
-//                this.shouldIrq = true;
-//            }
-            this.totalInsts++;
-        }
-        document.title = (this.frameCounter);
-        this.updateLCD();
-        this.frameCounter++;
-    };
-
-    return Wqx;
+    //region JsWqx.prototype.io_write
+    JsWqx.prototype.io_write = [
+        write00, // 0x00
+        writeXX, // 0x01
+        writeXX, // 0x02
+        writeXX, // 0x03
+        writeXX, // 0x04
+        writeXX, // 0x05
+        write06, // 0x06
+        writeXX, // 0x07
+        write08, // 0x08
+        write09, // 0x09
+        write0A, // 0x0A
+        writeXX, // 0x0B
+        writeXX, // 0x0C
+        write0D, // 0x0D
+        writeXX, // 0x0E
+        write0F, // 0x0F
+        writeXX, // 0x10
+        writeXX, // 0x11
+        writeXX, // 0x12
+        writeXX, // 0x13
+        writeXX, // 0x14
+        writeXX, // 0x15
+        writeXX, // 0x16
+        writeXX, // 0x17
+        writeXX, // 0x18
+        writeXX, // 0x19
+        writeXX, // 0x1A
+        writeXX, // 0x1B
+        writeXX, // 0x1C
+        writeXX, // 0x1D
+        writeXX, // 0x1E
+        writeXX, // 0x1F
+        write20, // 0x20
+        writeXX, // 0x21
+        writeXX, // 0x22
+        write23, // 0x23
+        writeXX, // 0x24
+        writeXX, // 0x25
+        writeXX, // 0x26
+        writeXX, // 0x27
+        writeXX, // 0x28
+        writeXX, // 0x29
+        writeXX, // 0x2A
+        writeXX, // 0x2B
+        writeXX, // 0x2C
+        writeXX, // 0x2D
+        writeXX, // 0x2E
+        writeXX, // 0x2F
+        writeXX, // 0x30
+        writeXX, // 0x31
+        writeXX, // 0x32
+        writeXX, // 0x33
+        writeXX, // 0x34
+        writeXX, // 0x35
+        writeXX, // 0x36
+        writeXX, // 0x37
+        writeXX, // 0x38
+        writeXX, // 0x39
+        writeXX, // 0x3A
+        writeXX, // 0x3B
+        writeXX, // 0x3C
+        writeXX, // 0x3D
+        writeXX, // 0x3E
+        write3F // 0x3F
+    ];
+    //endregion io_write
 })();
+
+JsWqx.prototype.load = function(addr) {
+    if (addr < 0x40) {
+        return this.io_read[addr](this, addr);
+    }
+    if (((this.fp_step === 4 && this.fp_type === 2) ||
+        (this.fp_step === 6 && this.fp_type === 3)) &&
+        (addr >= 0x4000 && addr < 0xC000)) {
+        this.fp_step = 0;
+        return 0x88;
+    }
+    return this.peekByte(addr);
+};
+
+JsWqx.prototype.store = function(addr, value) {
+    if (addr < 0x40) {
+        this.io_write[addr](this, addr, value);
+        return;
+    }
+
+    if (addr < 0x4000) {
+        this.memmap[addr >> 13][addr & 0x1FFF] = value;
+        return;
+    }
+
+    var page = this.memmap[addr >> 13];
+    if (page === this.page2 || page === this.page6) {
+        page[addr & 0x1FFF] = value;
+        return;
+    }
+
+    if (addr >= 0xE000) {
+        return;
+    }
+
+    // write to nor_flash address space.
+    // there must select a nor_bank.
+
+    var bank_idx = this.p_io[0x00];
+    if (bank_idx >= 0x20) {
+        return;
+    }
+
+    var fp_bank = this.nor_banks[bank_idx];
+
+    if (this.fp_step === 0) {
+        if (addr === 0x5555 && value === 0xAA) {
+            this.fp_step = 1;
+        }
+        return;
+    }
+    if (this.fp_step === 1) {
+        if (addr === 0xAAAA && value === 0x55) {
+            this.fp_step = 2;
+            return;
+        }
+    } else if (this.fp_step === 2) {
+        if (addr === 0x5555) {
+            this.fp_type = this.fp_type_map[value];
+            if (this.fp_type) {
+                if (this.fp_type === 1) {
+                    this.fp_bank = fp_bank;
+                    this.fp_bak1 = fp_bank[0x4000];
+                    this.fp_bak1 = fp_bank[0x4001];
+                }
+                this.fp_step = 3;
+                return;
+            }
+        }
+    } else if (this.fp_step === 3) {
+        if (this.fp_type === 1) {
+            if (value === 0xF0) {
+                this.fp_bank[0x4000] = this.fp_bak1;
+                this.fp_bank[0x4001] = this.fp_bak2;
+                this.fp_step = 0;
+                return;
+            }
+        } else if (this.fp_type === 2) {
+            fp_bank[addr - 0x4000] &= value;
+            this.fp_step = 4;
+            return;
+        } else if (this.fp_type === 4) {
+            this.fp_buff[addr & 0xFF] &= value;
+            this.fp_step = 4;
+            return;
+        } else if (this.fp_type === 3 || this.fp_type === 5) {
+            if (addr === 0x5555 && value === 0xAA) {
+                this.fp_step = 4;
+                return;
+            }
+        }
+    } else if (this.fp_step === 4) {
+        if (this.fp_type === 3 || this.fp_type === 5) {
+            if (addr === 0xAAAA && value === 0x55) {
+                this.fp_step = 5;
+                return;
+            }
+        }
+    } else if (this.fp_step === 5) {
+        if (addr === 0x5555 && value === 0x10) {
+            this.nor_banks.forEach(function(nor_bank) {
+                this.memset(nor_bank, 0xFF, 0x8000);
+            }, this);
+            if (this.fp_type === 5) {
+                this.memset(this.fp_buff, 0xFF, 0x100);
+            }
+            this.fp_step = 6;
+            return;
+        }
+        if (this.fp_type === 3) {
+            if (value === 0x30) {
+                this.memset(this.pByte(fp_bank,
+                    addr - (addr % 0x800) - 0x4000, 0x800), 0xFF, 0x800);
+                this.fp_step = 6;
+                return;
+            }
+        } else if (this.fp_type === 5) {
+            if (value === 0x48) {
+                this.memset(this.fp_buff, 0xFF, 0x100);
+                this.fp_step = 6;
+                return;
+            }
+        }
+    }
+    if (addr === 0x8000 && value === 0xF0) {
+        this.fp_step = 0;
+        return;
+    }
+    console.log('error occurs when operate in flash!');
+};
+
+JsWqx.prototype.adjustTime = function() {
+    if (++this.clock_buff[0] >= 60) {
+        this.clock_buff[0] = 0;
+        if (++this.clock_buff[1] >= 60) {
+            this.clock_buff[1] = 0;
+            if (++this.clock_buff[2] >= 24) {
+                this.clock_buff[2] &= 0;
+                ++this.clock_buff[3];
+            }
+        }
+    }
+};
+JsWqx.prototype.encounterIRQClock = function() {
+    if ((this.clock_buff[10] & 0x02) && (this.clock_flags & 0x02)) {
+        return (((this.clock_buff[7] & 0x80) && !((this.clock_buff[7] ^ this.clock_buff[2])) & 0x1F) ||
+            ((this.clock_buff[6] & 0x80) && !((this.clock_buff[6] ^ this.clock_buff[1])) & 0x3F) ||
+            ((this.clock_buff[5] & 0x80) && !((this.clock_buff[5] ^ this.clock_buff[0])) & 0x3F));
+    }
+    return true;
+};
+
+JsWqx.prototype.setKey = function(key, value) {
+    var row = key & 0x07;
+    var col = key >> 3;
+    if (value) {
+        this.keypad_matrix[row] |= 1 << col;
+    } else {
+        this.keypad_matrix[row] &= ~(1 << col);
+    }
+};
+
+JsWqx.prototype.irq = function() {
+    if (!this.flag_i) {
+        this._push(this.reg_pc >> 8);
+        this._push(this.reg_pc & 0xFF);
+        this.flag_b = 0;
+        this._push(this.getRegPs());
+        this.reg_pc = this.peekWord(this.IRQ_ADDR);
+        this.flag_i = 1;
+    }
+};
+
+JsWqx.prototype._loadBinary = function(dest, src) {
+    var byteOffset = 0;
+    while (byteOffset < src.byteLength) {
+        var dest1 = this.pByte(dest, byteOffset + 0x4000, 0x4000);
+        var dest2 = this.pByte(dest, byteOffset, 0x4000);
+        var src1 = this.pByte(src, byteOffset, 0x4000);
+        var src2 = this.pByte(src, byteOffset + 0x4000, 0x4000);
+        this.memcpy(dest1, src1, 0x4000);
+        this.memcpy(dest2, src2, 0x4000);
+        byteOffset += 0x8000;
+    }
+};
+JsWqx.prototype.init = function(rom, nor, ctx) {
+    this._loadBinary(this.rom, rom);
+    this._loadBinary(this.nor, nor);
+    if (ctx) {
+        this._lcd_ctx = ctx;
+        this._lcd_ctx.setTransform(2, 0, 0, 2, 0, 0);
+        this._lcd_ctx.fillStyle = '#000000';
+    }
+};
+
+JsWqx.prototype.reset = function() {
+    this.memset(this.ram, 0, 0x8000);
+    this.memmap[0] = this.page0;
+    this.memmap[1] = this.page1;
+    this.memmap[2] = this.page2;
+    this._fillBBsPages(this.rom_volume0);
+    this.memmap[6] = this.bbs_pages[0];
+    this.memmap[7] = this.pByte(this.rom_volume0[0], 0x2000, 0x2000);
+    this._switchBank(this.rom_volume0[0]);
+    this.reg_a = 0;
+    this.reg_x = 0;
+    this.reg_y = 0;
+    this.reg_sp_ = 0xFF;
+    this.setRegPs(0x24);
+    this.reg_pc = this.peekWord(this.RESET_ADDR);
+    this.cycles = 0;
+    if (this._lcd_ctx) {
+        this._lcd_ctx.clearRect(0, 0, 188, 80);
+    }
+    this.memset(this._lcd_buff, 0, 1600);
+    this.memset(this.clock_buff, 0, 80);
+    this.clock_flags = 0;
+    this.memset(this.jg_wav_buff, 0, 0x20);
+    this.jg_wav_flags = 0;
+    this.jg_wav_idx = 0;
+    this.jg_wav_playing = 0;
+    this.fp_step = 0;
+    this._frame_counter = 0;
+    this._timer1_counter = 0;
+};
+JsWqx.prototype.execute = function() {
+    var opcode = this.peekByte(this.reg_pc);
+    this.reg_pc = (this.reg_pc + 1) & 0xFFFF;
+    return this.op_func_tbl[opcode](this);
+};
+
+JsWqx.prototype.putPixel = function(x, y, p) {
+    if (p) {
+        this._lcd_ctx.fillRect(x, y, 1, 1);
+    } else {
+        this._lcd_ctx.clearRect(x, y, 1, 1);
+    }
+};
+
+JsWqx.prototype.updateLcd = function() {
+    if (!this._lcd_ctx || !this.p_lcd) return;
+    var p_lcd = this.p_lcd;
+    var lcd_buff = this._lcd_buff;
+    for (var y = 0; y < 80; y++) {
+        for (var j = 0; j < 20; j++) {
+            var offset = 20 * y + j;
+            var old_pixel = lcd_buff[offset];
+            var new_pixel = p_lcd[offset];
+            var changed = old_pixel ^ new_pixel;
+            if (changed) {
+                lcd_buff[offset] = new_pixel;
+                if (changed & 0x80) {
+                    if (j > 0) {
+                        this.putPixel(23 + j * 8, y, new_pixel & 0x80);
+                    } else {
+
+                    }
+                }
+                if (changed & 0x40) this.putPixel(23 + j * 8 + 1, y, new_pixel & 0x40);
+                if (changed & 0x20) this.putPixel(23 + j * 8 + 2, y, new_pixel & 0x20);
+                if (changed & 0x10) this.putPixel(23 + j * 8 + 3, y, new_pixel & 0x10);
+                if (changed & 0x08) this.putPixel(23 + j * 8 + 4, y, new_pixel & 0x08);
+                if (changed & 0x04) this.putPixel(23 + j * 8 + 5, y, new_pixel & 0x04);
+                if (changed & 0x02) this.putPixel(23 + j * 8 + 6, y, new_pixel & 0x02);
+                if (changed & 0x01) this.putPixel(23 + j * 8 + 7, y, new_pixel & 0x01);
+            }
+        }
+    }
+};
+
+JsWqx.prototype.frame = function() {
+    var next_frame_cycles = ((this._frame_counter + 1) * (this.CPU_FREQ / this.PERFERED_FPS)) | 0;
+    var CYCLES_TIMER0 = (this.CPU_FREQ / 2) | 0;
+    var CYCLES_TIMER1 = (this.CPU_FREQ / 256) | 0;
+    var next_timer0_cycles = ((this._timer0_counter + 1) * CYCLES_TIMER0) | 0;
+    var next_timer1_cycles = ((this._timer1_counter + 1) * CYCLES_TIMER1) | 0;
+    var should_irq = false;
+    var cycles = this.cycles;
+    while (cycles < next_frame_cycles) {
+        cycles = (cycles + this.execute()) | 0;
+        if (should_irq && !this.flag_i) {
+            should_irq = false;
+            this.irq();
+        }
+        if (cycles >= next_timer0_cycles) {
+            next_timer0_cycles += CYCLES_TIMER0;
+            this._timer0_counter = (this._timer0_counter + 1) | 0;
+            if (!(this._timer0_counter & 0x01)) {
+                this.adjustTime();
+            }
+            if (!this.encounterIRQClock() || (this._timer0_counter & 0x01)) {
+                this.p_io[0x3D] = 0;
+            } else {
+                this.p_io[0x3D] = 0x20;
+                this.clock_flags &= 0xFD;
+            }
+        }
+        if (cycles >= next_timer1_cycles) {
+            next_timer1_cycles = (next_timer1_cycles + CYCLES_TIMER1) | 0;
+            this._timer1_counter = (this._timer1_counter + 1) | 0;
+            this.clock_buff[4]++;
+            this.p_io[0x01] |= 0x08;
+            should_irq = true;
+        }
+    }
+    this._frame_counter = (this._frame_counter + 1) | 0;
+    this.cycles = cycles;
+    this.updateLcd();
+};
+
+JsWqx.prototype.play = function() {
+    if (!this._frame_timer) {
+        this._frame_timer = setInterval(
+            this.frame.bind(this), 1000 / this.PERFERED_FPS);
+    }
+};
+
+JsWqx.prototype.stop = function() {
+    if (this._frame_timer) {
+        clearInterval(this._frame_timer);
+        this._frame_timer = 0;
+    }
+};
