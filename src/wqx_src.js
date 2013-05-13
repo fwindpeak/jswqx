@@ -782,10 +782,6 @@ JsWqx.prototype.frame = function (){
     var cycles = this.cycles;
     while (cycles < next_frame_cycles) {
         cycles = (cycles + this.execute()) | 0;
-        if (should_irq && !this.flag_i) {
-            should_irq = false;
-            this.irq();
-        }
         if (cycles >= next_timer0_cycles) {
             next_timer0_cycles += CYCLES_TIMER0;
             this._timer0_counter = (this._timer0_counter + 1) | 0;
@@ -798,6 +794,11 @@ JsWqx.prototype.frame = function (){
                 this.p_io[0x3D] = 0x20;
                 this.clock_flags &= 0xFD;
             }
+            should_irq = true;
+        }
+        if (should_irq && !this.flag_i) {
+            should_irq = false;
+            this.irq();
         }
         if (cycles >= next_timer1_cycles) {
             next_timer1_cycles = (next_timer1_cycles + CYCLES_TIMER1) | 0;
