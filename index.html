@@ -139,6 +139,9 @@
             reader.addEventListener('load', function (){
                 wqx.setNorBuffer(reader.result);
                 alert('upload done.');
+                if (playing) {
+                    wqx.reset();
+                }
             });
             reader.readAsArrayBuffer(file);
         });
@@ -162,16 +165,16 @@
         last_blob_url = blob_url;
     };
 
-    var toggle = true;
+    var playing = true;
     btn_play_or_stop.onclick = function (){
-        if (toggle) {
+        if (playing) {
             btn_play_or_stop.textContent = 'stop';
             wqx.play();
         } else {
             btn_play_or_stop.textContent = 'play';
             wqx.stop();
         }
-        toggle = !toggle;
+        playing = !playing;
     };
     btn_reset.onclick = function (){
         wqx.reset();
