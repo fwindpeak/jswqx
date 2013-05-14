@@ -70,8 +70,8 @@ JsWqx.prototype.RESET_ADDR = 0xFFFC;
 JsWqx.prototype.NMI_ADDR = 0xFFFA;
 JsWqx.prototype.IRQ_ADDR = 0xFFFE;
 JsWqx.prototype.CPU_FREQ = 5120000;
-JsWqx.prototype.PERFERED_FPS = 50;
-JsWqx.prototype.CYCLES_FRAME = 5120000 / 50;
+JsWqx.prototype.PERFERED_FPS = 25;
+JsWqx.prototype.CYCLES_FRAME = 5120000 / 25;
 JsWqx.prototype.CYCLES_TIMER0 = 5120000 / 2;
 JsWqx.prototype.CYCLES_TIMER1 = 5120000 / 256;
 
@@ -179,7 +179,6 @@ JsWqx.prototype._generateAndPlayJGWav = function (){
     }
 
     function read06(this_, addr){
-        console.log('read06:' + this_.peekWord(4));
         return this_.p_io[addr];
     }
 
@@ -806,6 +805,7 @@ JsWqx.prototype.frame = function (){
         if (should_irq && !this.flag_i) {
             should_irq = false;
             this.irq();
+            cycles = (cycles + 7) | 0;
         }
         if (cycles >= next_timer1_cycles) {
             next_timer1_cycles = (next_timer1_cycles + this.CYCLES_TIMER1) | 0;
