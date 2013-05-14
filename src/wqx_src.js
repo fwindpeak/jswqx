@@ -69,11 +69,11 @@ function JsWqx(){
 JsWqx.prototype.RESET_ADDR = 0xFFFC;
 JsWqx.prototype.NMI_ADDR = 0xFFFA;
 JsWqx.prototype.IRQ_ADDR = 0xFFFE;
-JsWqx.prototype.CPU_FREQ = 10240000;
+JsWqx.prototype.CPU_FREQ = 5120000;
 JsWqx.prototype.PERFERED_FPS = 50;
-JsWqx.prototype.CYCLES_FRAME = 10240000 / 50;
-JsWqx.prototype.CYCLES_TIMER0 = 10240000 / 2;
-JsWqx.prototype.CYCLES_TIMER1 = 10240000 / 256;
+JsWqx.prototype.CYCLES_FRAME = 5120000 / 50;
+JsWqx.prototype.CYCLES_TIMER0 = 5120000 / 2;
+JsWqx.prototype.CYCLES_TIMER1 = 5120000 / 256;
 
 JsWqx.prototype.pByte = function (buffer, byteOffset, length){
     if (byteOffset == null) byteOffset = buffer.byteOffset | 0;
@@ -175,6 +175,11 @@ JsWqx.prototype._generateAndPlayJGWav = function (){
 
 (function (){
     function readXX(this_, addr){
+        return this_.p_io[addr];
+    }
+
+    function read06(this_, addr){
+        console.log('read06:' + this_.peekWord(4));
         return this_.p_io[addr];
     }
 
@@ -371,7 +376,7 @@ JsWqx.prototype._generateAndPlayJGWav = function (){
         readXX, // 0x03
         readXX, // 0x04
         readXX, // 0x05
-        readXX, // 0x06
+        read06, // 0x06
         readXX, // 0x07
         readXX, // 0x08
         readXX, // 0x09
