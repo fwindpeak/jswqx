@@ -2458,7 +2458,7 @@ JsWqx.prototype.irq = function() {
     }
 };
 
-JsWqx.prototype._loadBinary = function(dest, src) {
+JsWqx.prototype._processBinary = function(dest, src) {
     var byteOffset = 0;
     while (byteOffset < src.byteLength) {
         var dest1 = this.pByte(dest, byteOffset + 0x4000, 0x4000);
@@ -2470,9 +2470,18 @@ JsWqx.prototype._loadBinary = function(dest, src) {
         byteOffset += 0x8000;
     }
 };
+JsWqx.prototype.setNorBuffer = function(nor) {
+    this._processBinary(this.nor, nor);
+};
+JsWqx.prototype.getNorBuffer = function() {
+    var buff = new Uint8Array(this.nor.byteLength);
+    this._processBinary(buff, this.nor);
+    return buff;
+};
+
 JsWqx.prototype.init = function(rom, nor, ctx) {
-    this._loadBinary(this.rom, rom);
-    this._loadBinary(this.nor, nor);
+    this._processBinary(this.rom, rom);
+    this._processBinary(this.nor, nor);
     if (ctx) {
         this._lcd_ctx = ctx;
         this._lcd_ctx.setTransform(2, 0, 0, 2, 0, 0);

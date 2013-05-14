@@ -66,6 +66,8 @@
 <div id="controls">
     <button id="play_or_stop" disabled>play</button>
     <button id="reset" disabled>reset</button>
+    <button id="upload" disabled title="upload flash file">upload</button>
+    <button id="download" disabled title="download flash file">download</button>
     <button id="load">load</button>
 </div>
 <div id="wqx">
@@ -77,6 +79,8 @@
     var btn_play_or_stop = document.getElementById('play_or_stop');
     var btn_reset = document.getElementById('reset');
     var btn_load = document.getElementById('load');
+    var btn_upload = document.getElementById('upload');
+    var btn_download = document.getElementById('download');
     var lcd_canvas = document.getElementById('lcd');
     var keypad_div = document.getElementById('keypad');
     var wqx = new JsWqx(lcd_canvas);
@@ -89,6 +93,8 @@
                 setTimeout(function (){
                     btn_play_or_stop.removeAttribute('disabled');
                     btn_reset.removeAttribute('disabled');
+                    btn_upload.removeAttribute('disabled');
+                    btn_download.removeAttribute('disabled');
                     btn_load.textContent = 'done';
                     wqx.init(rom, nor, lcd_canvas.getContext('2d'));
                     wqx.reset();
@@ -122,6 +128,38 @@
             xhrNor.send();
         }, false);
         xhrRom.send();
+    };
+
+    btn_upload.onclick = function (){
+        var file_input = document.createElement('input');
+        file_input.setAttribute('type', 'file');
+        file_input.addEventListener('change', function (){
+            var file = file_input.files[0];
+            var reader = new FileReader();
+            reader.addEventListener('load', function (){
+                wqx.setNorBuffer(reader.result);
+                alert('upload done.');
+            });
+            reader.readAsArrayBuffer(file);
+        });
+        file_input.click();
+    };
+
+    var last_blob_url;
+    btn_download.onclick = function (){
+        var file_a = document.createElement('a');
+        file_a.setAttribute('target', '_blank');
+        var blob = new Blob([wqx.getNorBuffer()], {
+            type: 'application/octet-stream'
+        });
+        if (last_blob_url) {
+            URL.revokeObjectURL(last_blob_url);
+            last_blob_url = null;
+        }
+        var blob_url = URL.createObjectURL(blob);
+        file_a.setAttribute('href', blob_url);
+        file_a.click();
+        last_blob_url = blob_url;
     };
 
     var toggle = true;
