@@ -682,12 +682,13 @@ JsWqx.prototype.encounterCountDown = function (){
 
 JsWqx.prototype.WAKE_UP_MAP = function (map){
     map[0x08] = 0x00;
-    map[0x09] = 0x08;
-    map[0x0A] = 0x0A;
+    map[0x09] = 0x0A;
+    map[0x0A] = 0x08;
     map[0x0B] = 0x06;
     map[0x0C] = 0x04;
     map[0x0D] = 0x02;
-    map[0x0F] = 0x0C;
+    map[0x0E] = 0x0C;
+    map[0x0F] = 0x00;
     return map;
 }(new Uint8Array(0x10));
 JsWqx.prototype.setKey = function (key, value){
