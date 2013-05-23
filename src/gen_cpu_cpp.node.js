@@ -1,180 +1,182 @@
+var fs = require('fs');
+
 var $CYC = function (X){
-    return 'cycles = (cycles + '+ X +') | 0;';
+    return X == 1 ? 'cycles ++;' : 'cycles += ' + X + ';';
 };
 
 var $IMPLIED = '';
 var $ACC = '';
 var $IMM = '' +
-    'var addr = this.reg_pc;' +
-    'this.reg_pc = (this.reg_pc + 1) & 0xFFFF;';
+    'register uint16_t addr = reg_pc;' +
+    'reg_pc ++;';
 var $ZPG = '' +
-    'var addr = this.peekByte(this.reg_pc);' +
-    'this.reg_pc = (this.reg_pc + 1) & 0xFFFF;';
+    'register uint16_t addr = PEEK(reg_pc);' +
+    'reg_pc ++;';
 var $ZPGX = '' +
-    'var addr = (this.peekByte(this.reg_pc) + this.reg_x) & 0xFF;' +
-    'this.reg_pc = (this.reg_pc + 1) & 0xFFFF;';
+    'register uint16_t addr = (PEEK(reg_pc) + reg_x) & 0xFF;' +
+    'reg_pc ++;';
 var $ZPGY = '' +
-    'var addr = (this.peekByte(this.reg_pc) + this.reg_y) & 0xFF;' +
-    'this.reg_pc = (this.reg_pc + 1) & 0xFFFF;';
+    'register uint16_t addr = (PEEK(reg_pc) + reg_y) & 0xFF;' +
+    'reg_pc ++;';
 var $REL = '' +
-    'var addr = this.peekByte(this.reg_pc);' +
-    'this.reg_pc = (this.reg_pc + 1) & 0xFFFF;' +
-    'addr = (this.reg_pc + addr - ((addr & 0x80) << 1)) & 0xFFFF;';
+    'register uint16_t addr = PEEK(reg_pc);' +
+    'reg_pc ++;' +
+    'addr = reg_pc + addr - ((addr & 0x80) << 1);';
 var $ABS = '' +
-    'var addr = this.peekWord(this.reg_pc);' +
-    'this.reg_pc = (this.reg_pc + 2) & 0xFFFF;';
+    'register uint16_t addr = PEEKW(reg_pc);' +
+    'reg_pc += 2;';
 var $ABSX = '' +
-    'var addr = this.peekWord(this.reg_pc);' +
-    'cycles_add = ((addr & 0xFF) + this.reg_x) & 0xFF00 ? 1 : 0;' +
-    'addr = (addr + this.reg_x) & 0xFFFF;' +
-    'this.reg_pc = (this.reg_pc + 2) & 0xFFFF;';
+    'register uint16_t addr = PEEKW(reg_pc);' +
+    'cycles_add = ((addr & 0xFF) + reg_x) & 0xFF00 ? 1 : 0;' +
+    'addr += reg_x;' +
+    'reg_pc += 2;';
 var $ABSY = '' +
-    'var addr = this.peekWord(this.reg_pc);' +
-    'cycles_add = ((addr & 0xFF) + this.reg_y) & 0xFF00 ? 1 : 0;' +
-    'addr = (addr + this.reg_y) & 0xFFFF;' +
-    'this.reg_pc = (this.reg_pc + 2) & 0xFFFF;';
+    'register uint16_t addr = PEEKW(reg_pc);' +
+    'cycles_add = ((addr & 0xFF) + reg_y) & 0xFF00 ? 1 : 0;' +
+    'addr += reg_y;' +
+    'reg_pc += 2;';
 var $INDABS = '' +
-    'var addr = this.peekWord(this.peekWord(this.reg_pc));' +
-    'this.reg_pc = (this.reg_pc + 2) & 0xFFFF;';
+    'register uint16_t addr = PEEKW(PEEKW(reg_pc));' +
+    'reg_pc += 2;';
 var $XIND = '' +
-    'var addr = this.peekWord((this.peekByte(this.reg_pc) + this.reg_x) & 0xFF);' +
-    'this.reg_pc = (this.reg_pc + 1) & 0xFFFF;';
+    'register uint16_t addr = PEEKW((PEEK(reg_pc) + reg_x) & 0xFF);' +
+    'reg_pc ++;';
 var $INDY = '' +
-    'var addr = this.peekWord(this.peekByte(this.reg_pc));' +
-    'cycles_add = ((addr & 0xFF) + this.reg_y) & 0xFF00 ? 1 : 0;' +
-    'addr = (addr + this.reg_y) & 0xFFFF;' +
-    'this.reg_pc = (this.reg_pc + 1) & 0xFFFF;';
+    'register uint16_t addr = PEEKW(PEEK(reg_pc));' +
+    'cycles_add = ((addr & 0xFF) + reg_y) & 0xFF00 ? 1 : 0;' +
+    'addr += reg_y;' +
+    'reg_pc ++;';
 
-var $LDA = 'this._setNz(this.reg_a = this.load(addr));';
-var $LDX = 'this._setNz(this.reg_x = this.load(addr));';
-var $LDY = 'this._setNz(this.reg_y = this.load(addr));';
-var $STA = 'this.store(addr, this.reg_a);';
-var $STX = 'this.store(addr, this.reg_x);';
-var $STY = 'this.store(addr, this.reg_y);';
+var $LDA = 'SET_NZ(reg_a = LOAD(addr));';
+var $LDX = 'SET_NZ(reg_x = LOAD(addr));';
+var $LDY = 'SET_NZ(reg_y = LOAD(addr));';
+var $STA = 'STORE(addr, reg_a);';
+var $STX = 'STORE(addr, reg_x);';
+var $STY = 'STORE(addr, reg_y);';
 
-var $TAX = 'this._setNz(this.reg_x = this.reg_a);';
-var $TAY = 'this._setNz(this.reg_y = this.reg_a);';
-var $TXA = 'this._setNz(this.reg_a = this.reg_x);';
-var $TYA = 'this._setNz(this.reg_a = this.reg_y);';
+var $TAX = 'SET_NZ(reg_x = reg_a);';
+var $TAY = 'SET_NZ(reg_y = reg_a);';
+var $TXA = 'SET_NZ(reg_a = reg_x);';
+var $TYA = 'SET_NZ(reg_a = reg_y);';
 
-var $TSX = 'this._setNz(this.reg_x = this.reg_sp_);';
-var $TXS = 'this.reg_sp_ = this.reg_x;';
-var $PHA = 'this._push(this.reg_a);';
-var $PHP = 'this._push(this.getRegPs());';
-var $PLA = 'this._setNz(this.reg_a = this._pop());';
-var $PLP = 'this.setRegPs(this._pop());';
+var $TSX = 'SET_NZ(reg_x = reg_sp_);';
+var $TXS = 'reg_sp_ = reg_x;';
+var $PHA = 'PUSH(reg_a);';
+var $PHP = 'PUSH(GET_PS());';
+var $PLA = 'SET_NZ(reg_a = POP());';
+var $PLP = 'SET_PS(POP());';
 
-var $AND = 'this._setNz(this.reg_a &= this.load(addr));';
-var $EOR = 'this._setNz(this.reg_a ^= this.load(addr));';
-var $ORA = 'this._setNz(this.reg_a |= this.load(addr));';
+var $AND = 'SET_NZ(reg_a &= LOAD(addr));';
+var $EOR = 'SET_NZ(reg_a ^= LOAD(addr));';
+var $ORA = 'SET_NZ(reg_a |= LOAD(addr));';
 var $BIT = '' +
-    'var tmp1 = this.load(addr);' +
-    'this.flag_z = !(this.reg_a & tmp1) | 0;' +
-    'this.flag_n = tmp1 >> 7;' +
-    'this.flag_v = (tmp1 & 0x40) >> 6;';
+    'register uint8_t tmp1 = LOAD(addr);' +
+    'flag_z = !(reg_a & tmp1) ;' +
+    'flag_n = tmp1 >> 7;' +
+    'flag_v = (tmp1 & 0x40) >> 6;';
 
 var $ADC = '' +
-    'var tmp1 = this.load(addr);' +
-    'var tmp2 = (this.reg_a + tmp1 + this.flag_c) | 0;' +
-    'this.flag_c = (tmp2 > 0xFF) | 0;' +
-    'this.flag_v = ((this.reg_a ^ tmp1 ^ 0x80) & (this.reg_a ^ tmp2) & 0x80) >> 7;' +
-    'this._setNz(this.reg_a = tmp2 & 0xFF);';
+    'register uint8_t tmp1 = LOAD(addr);' +
+    'register int16_t tmp2 = reg_a + tmp1 + flag_c;' +
+    'flag_c = tmp2 > 0xFF;' +
+    'flag_v = (reg_a ^ tmp1 ^ 0x80) & (reg_a ^ tmp2) & 0x80;' +
+    'SET_NZ(reg_a = tmp2);';
 var $SBC = '' +
-    'var tmp1 = this.load(addr);' +
-    'var tmp2 = (this.reg_a - tmp1 + this.flag_c - 1) | 0;' +
-    'this.flag_c = (tmp2 >= 0) | 0;' +
-    'this.flag_v = ((this.reg_a ^ tmp1) & (this.reg_a ^ tmp2) & 0x80) >> 7;' +
-    'this._setNz(this.reg_a = tmp2 & 0xFF);';
+    'register uint8_t tmp1 = LOAD(addr);' +
+    'register int16_t tmp2 = reg_a - tmp1 + flag_c - 1;' +
+    'flag_c = tmp2 >= 0;' +
+    'flag_v = (reg_a ^ tmp1) & (reg_a ^ tmp2) & 0x80;' +
+    'SET_NZ(reg_a = tmp2);';
 var $CMP = '' +
-    'var tmp1 = this.reg_a - this.load(addr);' +
-    'this.flag_c = (tmp1 >= 0) | 0;' +
-    'this._setNz(tmp1);';
+    'register int16_t tmp1 = reg_a - LOAD(addr);' +
+    'flag_c = tmp1 >= 0;' +
+    'SET_NZ(tmp1);';
 var $CPX = '' +
-    'var tmp1 = this.reg_x - this.load(addr);' +
-    'this.flag_c = (tmp1 >= 0) | 0;' +
-    'this._setNz(tmp1);';
+    'register int16_t tmp1 = reg_x - LOAD(addr);' +
+    'flag_c = tmp1 >= 0;' +
+    'SET_NZ(tmp1);';
 var $CPY = '' +
-    'var tmp1 = this.reg_y - this.load(addr);' +
-    'this.flag_c = (tmp1 >= 0) | 0;' +
-    'this._setNz(tmp1);';
+    'register int16_t tmp1 = reg_y - LOAD(addr);' +
+    'flag_c = tmp1 >= 0;' +
+    'SET_NZ(tmp1);';
 
-var $INC = 'this.store(addr, this._setNz((this.load(addr) + 1) & 0xFF));';
-var $INX = 'this._setNz(this.reg_x = (this.reg_x + 1) & 0xFF);';
-var $INY = 'this._setNz(this.reg_y = (this.reg_y + 1) & 0xFF);';
-var $DEC = 'this.store(addr, this._setNz((this.load(addr) - 1) & 0xFF));';
-var $DEX = 'this._setNz(this.reg_x = (this.reg_x - 1) & 0xFF);';
-var $DEY = 'this._setNz(this.reg_y = (this.reg_y - 1) & 0xFF);';
+var $INC = 'STORE(addr, SET_NZ((LOAD(addr) + 1) & 0xFF));';
+var $INX = 'SET_NZ(reg_x = (reg_x + 1) & 0xFF);';
+var $INY = 'SET_NZ(reg_y = (reg_y + 1) & 0xFF);';
+var $DEC = 'STORE(addr, SET_NZ((LOAD(addr) - 1) & 0xFF));';
+var $DEX = 'SET_NZ(reg_x = (reg_x - 1) & 0xFF);';
+var $DEY = 'SET_NZ(reg_y = (reg_y - 1) & 0xFF);';
 
 var $ASL = '' +
-    'var tmp1 = this.load(addr);' +
-    'this.flag_c = tmp1 >> 7;' +
-    'this.store(addr, this._setNz((tmp1 << 1) & 0xFF));';
+    'register uint8_t tmp1 = LOAD(addr);' +
+    'flag_c = tmp1 >> 7;' +
+    'STORE(addr, SET_NZ((tmp1 << 1) & 0xFF));';
 var $LSR = '' +
-    'var tmp1 = this.load(addr);' +
-    'this.flag_c = tmp1 & 0x01;' +
+    'register uint8_t tmp1 = LOAD(addr);' +
+    'flag_c = tmp1 & 0x01;' +
     'tmp1 >>= 1;' +
-    'this.flag_n = 0;' +
-    'this.flag_z = !tmp1 | 0;' +
-    'this.store(addr, tmp1);';
+    'flag_n = 0;' +
+    'flag_z = !tmp1;' +
+    'STORE(addr, tmp1);';
 var $ROL = '' +
-    'var tmp1 = this.load(addr);' +
-    'this.store(addr, this._setNz(((tmp1 << 1) | this.flag_c) & 0xFF));' +
-    'this.flag_c = tmp1 >> 7;';
+    'register uint8_t tmp1 = LOAD(addr);' +
+    'STORE(addr, SET_NZ(((tmp1 << 1) | flag_c) & 0xFF));' +
+    'flag_c = tmp1 >> 7;';
 var $ROR = '' +
-    'var tmp1 = this.load(addr);' +
-    'this.store(addr, this._setNz((tmp1 >> 1) | (this.flag_c << 7)));' +
-    'this.flag_c = tmp1 & 0x01;';
+    'register uint8_t tmp1 = LOAD(addr);' +
+    'STORE(addr, SET_NZ((tmp1 >> 1) | (flag_c << 7)));' +
+    'flag_c = tmp1 & 0x01;';
 var $ASLA = '' +
-    'this.flag_c = this.reg_a >> 7;' +
-    'this._setNz(this.reg_a = (this.reg_a << 1) & 0xFF);';
+    'flag_c = reg_a >> 7;' +
+    'SET_NZ(reg_a = (reg_a << 1) & 0xFF);';
 var $LSRA = '' +
-    'this.flag_c = this.reg_a & 0x01;' +
-    'this._setNz(this.reg_a >>= 1);';
+    'flag_c = reg_a & 0x01;' +
+    'SET_NZ(reg_a >>= 1);';
 var $ROLA = '' +
-    'var tmp1 = this.flag_c;' +
-    'this.flag_c = this.reg_a >> 7;' +
-    'this._setNz(this.reg_a = ((this.reg_a << 1) | tmp1) & 0xFF);';
+    'register uint8_t tmp1 = reg_a;' +
+    'SET_NZ(reg_a = ((reg_a << 1) | flag_c) & 0xFF);' +
+    'flag_c = tmp1 >> 7;';
 var $RORA = '' +
-    'var tmp1 = this.flag_c;' +
-    'this.flag_c = this.reg_a & 0x01;' +
-    'this._setNz(this.reg_a = (this.reg_a >> 1) | (tmp1 << 7));';
+    'register uint8_t tmp1 = reg_a;' +
+    'SET_NZ(reg_a = (reg_a >> 1) | (flag_c << 7));' +
+    'flag_c = tmp1 & 0x01;';
 
-var $JMP = 'this.reg_pc = addr;';
+var $JMP = 'reg_pc = addr;';
 var $JSR = '' +
-    'this.reg_pc = (this.reg_pc - 1) & 0xFFFF;' +
-    'this._push(this.reg_pc >> 8);' +
-    'this._push(this.reg_pc & 0xFF);' +
-    'this.reg_pc = addr;';
-var $RTS = 'this.reg_pc = ((this._pop() | (this._pop() << 8)) + 1) & 0xFFFF;';
+    'reg_pc = (reg_pc - 1) & 0xFFFF;' +
+    'PUSH(reg_pc >> 8);' +
+    'PUSH(reg_pc & 0xFF);' +
+    'reg_pc = addr;';
+var $RTS = 'reg_pc = ((POP() | (POP() << 8)) + 1) & 0xFFFF;';
 
-var $BCS = 'if ( this.flag_c) { '+ $CYC('((this.reg_pc ^ addr) & 0xFF00 ? 1 : 2)') +'this.reg_pc = addr; }';
-var $BCC = 'if (!this.flag_c) { '+ $CYC('((this.reg_pc ^ addr) & 0xFF00 ? 1 : 2)') +'this.reg_pc = addr; }';
-var $BEQ = 'if ( this.flag_z) { '+ $CYC('((this.reg_pc ^ addr) & 0xFF00 ? 1 : 2)') +'this.reg_pc = addr; }';
-var $BNE = 'if (!this.flag_z) { '+ $CYC('((this.reg_pc ^ addr) & 0xFF00 ? 1 : 2)') +'this.reg_pc = addr; }';
-var $BMI = 'if ( this.flag_n) { '+ $CYC('((this.reg_pc ^ addr) & 0xFF00 ? 1 : 2)') +'this.reg_pc = addr; }';
-var $BPL = 'if (!this.flag_n) { '+ $CYC('((this.reg_pc ^ addr) & 0xFF00 ? 1 : 2)') +'this.reg_pc = addr; }';
-var $BVS = 'if ( this.flag_v) { '+ $CYC('((this.reg_pc ^ addr) & 0xFF00 ? 1 : 2)') +'this.reg_pc = addr; }';
-var $BVC = 'if (!this.flag_v) { '+ $CYC('((this.reg_pc ^ addr) & 0xFF00 ? 1 : 2)') +'this.reg_pc = addr; }';
+var $BCS = 'if ( flag_c) { '+ $CYC('((reg_pc ^ addr) & 0xFF00 ? 1 : 2)') +'reg_pc = addr; }';
+var $BCC = 'if (!flag_c) { '+ $CYC('((reg_pc ^ addr) & 0xFF00 ? 1 : 2)') +'reg_pc = addr; }';
+var $BEQ = 'if ( flag_z) { '+ $CYC('((reg_pc ^ addr) & 0xFF00 ? 1 : 2)') +'reg_pc = addr; }';
+var $BNE = 'if (!flag_z) { '+ $CYC('((reg_pc ^ addr) & 0xFF00 ? 1 : 2)') +'reg_pc = addr; }';
+var $BMI = 'if ( flag_n) { '+ $CYC('((reg_pc ^ addr) & 0xFF00 ? 1 : 2)') +'reg_pc = addr; }';
+var $BPL = 'if (!flag_n) { '+ $CYC('((reg_pc ^ addr) & 0xFF00 ? 1 : 2)') +'reg_pc = addr; }';
+var $BVS = 'if ( flag_v) { '+ $CYC('((reg_pc ^ addr) & 0xFF00 ? 1 : 2)') +'reg_pc = addr; }';
+var $BVC = 'if (!flag_v) { '+ $CYC('((reg_pc ^ addr) & 0xFF00 ? 1 : 2)') +'reg_pc = addr; }';
 
-var $CLC = 'this.flag_c = 0;';
-var $CLD = 'this.flag_d = 0;';
-var $CLI = 'this.flag_i = 0;';
-var $CLV = 'this.flag_v = 0;';
-var $SEC = 'this.flag_c = 1;';
-var $SED = 'this.flag_d = 1;';
-var $SEI = 'this.flag_i = 1;';
+var $CLC = 'flag_c = 0;';
+var $CLD = 'flag_d = 0;';
+var $CLI = 'flag_i = 0;';
+var $CLV = 'flag_v = 0;';
+var $SEC = 'flag_c = 1;';
+var $SED = 'flag_d = 1;';
+var $SEI = 'flag_i = 1;';
 
 var $BRK = '' +
-    'this.reg_pc = (this.reg_pc + 1) & 0xFFFF;' +
-    'this._push(this.reg_pc >> 8);' +
-    'this._push(this.reg_pc & 0xFF);' +
-    'this.flag_b = 1;' +
-    'this._push(this.getRegPs());' +
+    'reg_pc ++;' +
+    'PUSH(reg_pc >> 8);' +
+    'PUSH(reg_pc & 0xFF);' +
+    'flag_b = 1;' +
+    'PUSH(GET_PS());' +
     '\n//wqx set flag_i here.\n' +
-    'this.flag_i = 1;' +
-    'this.reg_pc = this.peekWord(this.IRQ_ADDR);';
+    'flag_i = 1;' +
+    'reg_pc = PEEKW(IRQ_VEC_ADDR);';
 var $NOP = '';
-var $RTI = $PLP + 'this.reg_pc = (this._pop() | (this._pop() << 8));';
+var $RTI = $PLP + 'reg_pc = (POP() | (POP() << 8));';
 
 var INSTRUCTIONS = [];
 INSTRUCTIONS[0x00] = [$BRK,          $CYC(7)];
@@ -512,7 +514,7 @@ CYCLES_ADD_MAP[0xF9] = 1;
 CYCLES_ADD_MAP[0xE1] = 1;
 CYCLES_ADD_MAP[0xF1] = 1;
 
-exports.CODE = ('[' +
+var CODE = ('switch (PEEK(reg_pc ++)) {' +
     INSTRUCTIONS.map(function (inst, opcode){
         if (inst[0] == $ABSX ||
             inst[0] == $ABSY ||
@@ -525,12 +527,10 @@ exports.CODE = ('[' +
                 inst[0] = inst[0].replace(/;cycles_add = [^;]+;/, ';');
             }
         }
-        var body = 'var cycles = 0;' + inst.join('') +'return cycles;';
-        if (!inst.length) {
-            body = 'return 0;';
-        }
-        return 'function op' +
+        var body = inst.join('');
+        return 'case 0x' +
             ('00'+ opcode.toString(16).toUpperCase()).slice(-2) +
-            '(this_){ '+ body +' }'
-    }).join(',') +
-    ']').replace(/this\./g, 'this_.');
+            ':{ '+ body +' }break;'
+    }).join('\n') +
+    '}');
+fs.writeFileSync(__dirname + '/cpu.cpp', CODE, 'utf-8');

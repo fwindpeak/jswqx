@@ -42,13 +42,18 @@ function JsWqx() {
     this.bbs_pages = new Array(0x10);
     this.memmap = new Array(8);
 
+    this.keypad_matrix = new Uint8Array(8);
+
     this.clock_buff = new Uint8Array(80);
     this.clock_flags = 0;
     this.jg_wav_buff = new Uint8Array(0x20);
     this.jg_wav_flags = 0;
     this.jg_wav_idx = 0;
     this.jg_wav_playing = 0;
-    this.keypad_matrix = new Uint8Array(8);
+    this.should_wake_up = false;
+    this.wake_up_pending = false;
+    this.wake_up_value = 0;
+    this.slept = false;
 
     // flash programming.
     this.fp_step = 0;
@@ -65,6 +70,8 @@ function JsWqx() {
     this._timer0_counter = 0;
     this._lcd_ctx = null;
     this._lcd_buff = new Uint8Array(1600);
+    this._lcd_last_write_addr = 0;
+
 }
 JsWqx.prototype.RESET_ADDR = 0xFFFC;
 JsWqx.prototype.NMI_ADDR = 0xFFFA;
@@ -256,13 +263,11 @@ JsWqx.prototype.op_func_tbl = [
     },
     function op11(this_) {
         var cycles = 0;
-        var cycles_add = 0;
         var addr = this_.peekWord(this_.peekByte(this_.reg_pc));
-        cycles_add = ((addr & 0xFF) + this_.reg_y) & 0xFF00 ? 1 : 0;
+        cycles = (cycles + ((addr & 0xFF) + this_.reg_y) & 0xFF00 ? 1 : 0) | 0;
         addr = (addr + this_.reg_y) & 0xFFFF;
         this_.reg_pc = (this_.reg_pc + 1) & 0xFFFF;
         this_._setNz(this_.reg_a |= this_.load(addr));
-        cycles = (cycles + cycles_add) | 0;
         cycles = (cycles + 5) | 0;
         return cycles;
     },
@@ -304,13 +309,11 @@ JsWqx.prototype.op_func_tbl = [
     },
     function op19(this_) {
         var cycles = 0;
-        var cycles_add = 0;
         var addr = this_.peekWord(this_.reg_pc);
-        cycles_add = ((addr & 0xFF) + this_.reg_y) & 0xFF00 ? 1 : 0;
+        cycles = (cycles + ((addr & 0xFF) + this_.reg_y) & 0xFF00 ? 1 : 0) | 0;
         addr = (addr + this_.reg_y) & 0xFFFF;
         this_.reg_pc = (this_.reg_pc + 2) & 0xFFFF;
         this_._setNz(this_.reg_a |= this_.load(addr));
-        cycles = (cycles + cycles_add) | 0;
         cycles = (cycles + 4) | 0;
         return cycles;
     },
@@ -325,13 +328,11 @@ JsWqx.prototype.op_func_tbl = [
     },
     function op1D(this_) {
         var cycles = 0;
-        var cycles_add = 0;
         var addr = this_.peekWord(this_.reg_pc);
-        cycles_add = ((addr & 0xFF) + this_.reg_x) & 0xFF00 ? 1 : 0;
+        cycles = (cycles + ((addr & 0xFF) + this_.reg_x) & 0xFF00 ? 1 : 0) | 0;
         addr = (addr + this_.reg_x) & 0xFFFF;
         this_.reg_pc = (this_.reg_pc + 2) & 0xFFFF;
         this_._setNz(this_.reg_a |= this_.load(addr));
-        cycles = (cycles + cycles_add) | 0;
         cycles = (cycles + 4) | 0;
         return cycles;
     },
@@ -477,13 +478,11 @@ JsWqx.prototype.op_func_tbl = [
     },
     function op31(this_) {
         var cycles = 0;
-        var cycles_add = 0;
         var addr = this_.peekWord(this_.peekByte(this_.reg_pc));
-        cycles_add = ((addr & 0xFF) + this_.reg_y) & 0xFF00 ? 1 : 0;
+        cycles = (cycles + ((addr & 0xFF) + this_.reg_y) & 0xFF00 ? 1 : 0) | 0;
         addr = (addr + this_.reg_y) & 0xFFFF;
         this_.reg_pc = (this_.reg_pc + 1) & 0xFFFF;
         this_._setNz(this_.reg_a &= this_.load(addr));
-        cycles = (cycles + cycles_add) | 0;
         cycles = (cycles + 5) | 0;
         return cycles;
     },
@@ -525,13 +524,11 @@ JsWqx.prototype.op_func_tbl = [
     },
     function op39(this_) {
         var cycles = 0;
-        var cycles_add = 0;
         var addr = this_.peekWord(this_.reg_pc);
-        cycles_add = ((addr & 0xFF) + this_.reg_y) & 0xFF00 ? 1 : 0;
+        cycles = (cycles + ((addr & 0xFF) + this_.reg_y) & 0xFF00 ? 1 : 0) | 0;
         addr = (addr + this_.reg_y) & 0xFFFF;
         this_.reg_pc = (this_.reg_pc + 2) & 0xFFFF;
         this_._setNz(this_.reg_a &= this_.load(addr));
-        cycles = (cycles + cycles_add) | 0;
         cycles = (cycles + 4) | 0;
         return cycles;
     },
@@ -546,13 +543,11 @@ JsWqx.prototype.op_func_tbl = [
     },
     function op3D(this_) {
         var cycles = 0;
-        var cycles_add = 0;
         var addr = this_.peekWord(this_.reg_pc);
-        cycles_add = ((addr & 0xFF) + this_.reg_x) & 0xFF00 ? 1 : 0;
+        cycles = (cycles + ((addr & 0xFF) + this_.reg_x) & 0xFF00 ? 1 : 0) | 0;
         addr = (addr + this_.reg_x) & 0xFFFF;
         this_.reg_pc = (this_.reg_pc + 2) & 0xFFFF;
         this_._setNz(this_.reg_a &= this_.load(addr));
-        cycles = (cycles + cycles_add) | 0;
         cycles = (cycles + 4) | 0;
         return cycles;
     },
@@ -688,13 +683,11 @@ JsWqx.prototype.op_func_tbl = [
     },
     function op51(this_) {
         var cycles = 0;
-        var cycles_add = 0;
         var addr = this_.peekWord(this_.peekByte(this_.reg_pc));
-        cycles_add = ((addr & 0xFF) + this_.reg_y) & 0xFF00 ? 1 : 0;
+        cycles = (cycles + ((addr & 0xFF) + this_.reg_y) & 0xFF00 ? 1 : 0) | 0;
         addr = (addr + this_.reg_y) & 0xFFFF;
         this_.reg_pc = (this_.reg_pc + 1) & 0xFFFF;
         this_._setNz(this_.reg_a ^= this_.load(addr));
-        cycles = (cycles + cycles_add) | 0;
         cycles = (cycles + 5) | 0;
         return cycles;
     },
@@ -739,13 +732,11 @@ JsWqx.prototype.op_func_tbl = [
     },
     function op59(this_) {
         var cycles = 0;
-        var cycles_add = 0;
         var addr = this_.peekWord(this_.reg_pc);
-        cycles_add = ((addr & 0xFF) + this_.reg_y) & 0xFF00 ? 1 : 0;
+        cycles = (cycles + ((addr & 0xFF) + this_.reg_y) & 0xFF00 ? 1 : 0) | 0;
         addr = (addr + this_.reg_y) & 0xFFFF;
         this_.reg_pc = (this_.reg_pc + 2) & 0xFFFF;
         this_._setNz(this_.reg_a ^= this_.load(addr));
-        cycles = (cycles + cycles_add) | 0;
         cycles = (cycles + 4) | 0;
         return cycles;
     },
@@ -760,13 +751,11 @@ JsWqx.prototype.op_func_tbl = [
     },
     function op5D(this_) {
         var cycles = 0;
-        var cycles_add = 0;
         var addr = this_.peekWord(this_.reg_pc);
-        cycles_add = ((addr & 0xFF) + this_.reg_x) & 0xFF00 ? 1 : 0;
+        cycles = (cycles + ((addr & 0xFF) + this_.reg_x) & 0xFF00 ? 1 : 0) | 0;
         addr = (addr + this_.reg_x) & 0xFFFF;
         this_.reg_pc = (this_.reg_pc + 2) & 0xFFFF;
         this_._setNz(this_.reg_a ^= this_.load(addr));
-        cycles = (cycles + cycles_add) | 0;
         cycles = (cycles + 4) | 0;
         return cycles;
     },
@@ -915,9 +904,8 @@ JsWqx.prototype.op_func_tbl = [
     },
     function op71(this_) {
         var cycles = 0;
-        var cycles_add = 0;
         var addr = this_.peekWord(this_.peekByte(this_.reg_pc));
-        cycles_add = ((addr & 0xFF) + this_.reg_y) & 0xFF00 ? 1 : 0;
+        cycles = (cycles + ((addr & 0xFF) + this_.reg_y) & 0xFF00 ? 1 : 0) | 0;
         addr = (addr + this_.reg_y) & 0xFFFF;
         this_.reg_pc = (this_.reg_pc + 1) & 0xFFFF;
         var tmp1 = this_.load(addr);
@@ -925,7 +913,6 @@ JsWqx.prototype.op_func_tbl = [
         this_.flag_c = (tmp2 > 0xFF) | 0;
         this_.flag_v = ((this_.reg_a ^ tmp1 ^ 0x80) & (this_.reg_a ^ tmp2) & 0x80) >> 7;
         this_._setNz(this_.reg_a = tmp2 & 0xFF);
-        cycles = (cycles + cycles_add) | 0;
         cycles = (cycles + 5) | 0;
         return cycles;
     },
@@ -971,9 +958,8 @@ JsWqx.prototype.op_func_tbl = [
     },
     function op79(this_) {
         var cycles = 0;
-        var cycles_add = 0;
         var addr = this_.peekWord(this_.reg_pc);
-        cycles_add = ((addr & 0xFF) + this_.reg_y) & 0xFF00 ? 1 : 0;
+        cycles = (cycles + ((addr & 0xFF) + this_.reg_y) & 0xFF00 ? 1 : 0) | 0;
         addr = (addr + this_.reg_y) & 0xFFFF;
         this_.reg_pc = (this_.reg_pc + 2) & 0xFFFF;
         var tmp1 = this_.load(addr);
@@ -981,7 +967,6 @@ JsWqx.prototype.op_func_tbl = [
         this_.flag_c = (tmp2 > 0xFF) | 0;
         this_.flag_v = ((this_.reg_a ^ tmp1 ^ 0x80) & (this_.reg_a ^ tmp2) & 0x80) >> 7;
         this_._setNz(this_.reg_a = tmp2 & 0xFF);
-        cycles = (cycles + cycles_add) | 0;
         cycles = (cycles + 4) | 0;
         return cycles;
     },
@@ -996,9 +981,8 @@ JsWqx.prototype.op_func_tbl = [
     },
     function op7D(this_) {
         var cycles = 0;
-        var cycles_add = 0;
         var addr = this_.peekWord(this_.reg_pc);
-        cycles_add = ((addr & 0xFF) + this_.reg_x) & 0xFF00 ? 1 : 0;
+        cycles = (cycles + ((addr & 0xFF) + this_.reg_x) & 0xFF00 ? 1 : 0) | 0;
         addr = (addr + this_.reg_x) & 0xFFFF;
         this_.reg_pc = (this_.reg_pc + 2) & 0xFFFF;
         var tmp1 = this_.load(addr);
@@ -1006,7 +990,6 @@ JsWqx.prototype.op_func_tbl = [
         this_.flag_c = (tmp2 > 0xFF) | 0;
         this_.flag_v = ((this_.reg_a ^ tmp1 ^ 0x80) & (this_.reg_a ^ tmp2) & 0x80) >> 7;
         this_._setNz(this_.reg_a = tmp2 & 0xFF);
-        cycles = (cycles + cycles_add) | 0;
         cycles = (cycles + 4) | 0;
         return cycles;
     },
@@ -1327,13 +1310,11 @@ JsWqx.prototype.op_func_tbl = [
     },
     function opB1(this_) {
         var cycles = 0;
-        var cycles_add = 0;
         var addr = this_.peekWord(this_.peekByte(this_.reg_pc));
-        cycles_add = ((addr & 0xFF) + this_.reg_y) & 0xFF00 ? 1 : 0;
+        cycles = (cycles + ((addr & 0xFF) + this_.reg_y) & 0xFF00 ? 1 : 0) | 0;
         addr = (addr + this_.reg_y) & 0xFFFF;
         this_.reg_pc = (this_.reg_pc + 1) & 0xFFFF;
         this_._setNz(this_.reg_a = this_.load(addr));
-        cycles = (cycles + cycles_add) | 0;
         cycles = (cycles + 5) | 0;
         return cycles;
     },
@@ -1378,13 +1359,11 @@ JsWqx.prototype.op_func_tbl = [
     },
     function opB9(this_) {
         var cycles = 0;
-        var cycles_add = 0;
         var addr = this_.peekWord(this_.reg_pc);
-        cycles_add = ((addr & 0xFF) + this_.reg_y) & 0xFF00 ? 1 : 0;
+        cycles = (cycles + ((addr & 0xFF) + this_.reg_y) & 0xFF00 ? 1 : 0) | 0;
         addr = (addr + this_.reg_y) & 0xFFFF;
         this_.reg_pc = (this_.reg_pc + 2) & 0xFFFF;
         this_._setNz(this_.reg_a = this_.load(addr));
-        cycles = (cycles + cycles_add) | 0;
         cycles = (cycles + 4) | 0;
         return cycles;
     },
@@ -1399,37 +1378,31 @@ JsWqx.prototype.op_func_tbl = [
     },
     function opBC(this_) {
         var cycles = 0;
-        var cycles_add = 0;
         var addr = this_.peekWord(this_.reg_pc);
-        cycles_add = ((addr & 0xFF) + this_.reg_x) & 0xFF00 ? 1 : 0;
+        cycles = (cycles + ((addr & 0xFF) + this_.reg_x) & 0xFF00 ? 1 : 0) | 0;
         addr = (addr + this_.reg_x) & 0xFFFF;
         this_.reg_pc = (this_.reg_pc + 2) & 0xFFFF;
         this_._setNz(this_.reg_y = this_.load(addr));
-        cycles = (cycles + cycles_add) | 0;
         cycles = (cycles + 4) | 0;
         return cycles;
     },
     function opBD(this_) {
         var cycles = 0;
-        var cycles_add = 0;
         var addr = this_.peekWord(this_.reg_pc);
-        cycles_add = ((addr & 0xFF) + this_.reg_x) & 0xFF00 ? 1 : 0;
+        cycles = (cycles + ((addr & 0xFF) + this_.reg_x) & 0xFF00 ? 1 : 0) | 0;
         addr = (addr + this_.reg_x) & 0xFFFF;
         this_.reg_pc = (this_.reg_pc + 2) & 0xFFFF;
         this_._setNz(this_.reg_a = this_.load(addr));
-        cycles = (cycles + cycles_add) | 0;
         cycles = (cycles + 4) | 0;
         return cycles;
     },
     function opBE(this_) {
         var cycles = 0;
-        var cycles_add = 0;
         var addr = this_.peekWord(this_.reg_pc);
-        cycles_add = ((addr & 0xFF) + this_.reg_y) & 0xFF00 ? 1 : 0;
+        cycles = (cycles + ((addr & 0xFF) + this_.reg_y) & 0xFF00 ? 1 : 0) | 0;
         addr = (addr + this_.reg_y) & 0xFFFF;
         this_.reg_pc = (this_.reg_pc + 2) & 0xFFFF;
         this_._setNz(this_.reg_x = this_.load(addr));
-        cycles = (cycles + cycles_add) | 0;
         cycles = (cycles + 4) | 0;
         return cycles;
     },
@@ -1563,15 +1536,13 @@ JsWqx.prototype.op_func_tbl = [
     },
     function opD1(this_) {
         var cycles = 0;
-        var cycles_add = 0;
         var addr = this_.peekWord(this_.peekByte(this_.reg_pc));
-        cycles_add = ((addr & 0xFF) + this_.reg_y) & 0xFF00 ? 1 : 0;
+        cycles = (cycles + ((addr & 0xFF) + this_.reg_y) & 0xFF00 ? 1 : 0) | 0;
         addr = (addr + this_.reg_y) & 0xFFFF;
         this_.reg_pc = (this_.reg_pc + 1) & 0xFFFF;
         var tmp1 = this_.reg_a - this_.load(addr);
         this_.flag_c = (tmp1 >= 0) | 0;
         this_._setNz(tmp1);
-        cycles = (cycles + cycles_add) | 0;
         cycles = (cycles + 5) | 0;
         return cycles;
     },
@@ -1613,15 +1584,13 @@ JsWqx.prototype.op_func_tbl = [
     },
     function opD9(this_) {
         var cycles = 0;
-        var cycles_add = 0;
         var addr = this_.peekWord(this_.reg_pc);
-        cycles_add = ((addr & 0xFF) + this_.reg_y) & 0xFF00 ? 1 : 0;
+        cycles = (cycles + ((addr & 0xFF) + this_.reg_y) & 0xFF00 ? 1 : 0) | 0;
         addr = (addr + this_.reg_y) & 0xFFFF;
         this_.reg_pc = (this_.reg_pc + 2) & 0xFFFF;
         var tmp1 = this_.reg_a - this_.load(addr);
         this_.flag_c = (tmp1 >= 0) | 0;
         this_._setNz(tmp1);
-        cycles = (cycles + cycles_add) | 0;
         cycles = (cycles + 4) | 0;
         return cycles;
     },
@@ -1636,15 +1605,13 @@ JsWqx.prototype.op_func_tbl = [
     },
     function opDD(this_) {
         var cycles = 0;
-        var cycles_add = 0;
         var addr = this_.peekWord(this_.reg_pc);
-        cycles_add = ((addr & 0xFF) + this_.reg_x) & 0xFF00 ? 1 : 0;
+        cycles = (cycles + ((addr & 0xFF) + this_.reg_x) & 0xFF00 ? 1 : 0) | 0;
         addr = (addr + this_.reg_x) & 0xFFFF;
         this_.reg_pc = (this_.reg_pc + 2) & 0xFFFF;
         var tmp1 = this_.reg_a - this_.load(addr);
         this_.flag_c = (tmp1 >= 0) | 0;
         this_._setNz(tmp1);
-        cycles = (cycles + cycles_add) | 0;
         cycles = (cycles + 4) | 0;
         return cycles;
     },
@@ -1794,9 +1761,8 @@ JsWqx.prototype.op_func_tbl = [
     },
     function opF1(this_) {
         var cycles = 0;
-        var cycles_add = 0;
         var addr = this_.peekWord(this_.peekByte(this_.reg_pc));
-        cycles_add = ((addr & 0xFF) + this_.reg_y) & 0xFF00 ? 1 : 0;
+        cycles = (cycles + ((addr & 0xFF) + this_.reg_y) & 0xFF00 ? 1 : 0) | 0;
         addr = (addr + this_.reg_y) & 0xFFFF;
         this_.reg_pc = (this_.reg_pc + 1) & 0xFFFF;
         var tmp1 = this_.load(addr);
@@ -1804,7 +1770,6 @@ JsWqx.prototype.op_func_tbl = [
         this_.flag_c = (tmp2 >= 0) | 0;
         this_.flag_v = ((this_.reg_a ^ tmp1) & (this_.reg_a ^ tmp2) & 0x80) >> 7;
         this_._setNz(this_.reg_a = tmp2 & 0xFF);
-        cycles = (cycles + cycles_add) | 0;
         cycles = (cycles + 5) | 0;
         return cycles;
     },
@@ -1848,9 +1813,8 @@ JsWqx.prototype.op_func_tbl = [
     },
     function opF9(this_) {
         var cycles = 0;
-        var cycles_add = 0;
         var addr = this_.peekWord(this_.reg_pc);
-        cycles_add = ((addr & 0xFF) + this_.reg_y) & 0xFF00 ? 1 : 0;
+        cycles = (cycles + ((addr & 0xFF) + this_.reg_y) & 0xFF00 ? 1 : 0) | 0;
         addr = (addr + this_.reg_y) & 0xFFFF;
         this_.reg_pc = (this_.reg_pc + 2) & 0xFFFF;
         var tmp1 = this_.load(addr);
@@ -1858,7 +1822,6 @@ JsWqx.prototype.op_func_tbl = [
         this_.flag_c = (tmp2 >= 0) | 0;
         this_.flag_v = ((this_.reg_a ^ tmp1) & (this_.reg_a ^ tmp2) & 0x80) >> 7;
         this_._setNz(this_.reg_a = tmp2 & 0xFF);
-        cycles = (cycles + cycles_add) | 0;
         cycles = (cycles + 4) | 0;
         return cycles;
     },
@@ -1873,9 +1836,8 @@ JsWqx.prototype.op_func_tbl = [
     },
     function opFD(this_) {
         var cycles = 0;
-        var cycles_add = 0;
         var addr = this_.peekWord(this_.reg_pc);
-        cycles_add = ((addr & 0xFF) + this_.reg_x) & 0xFF00 ? 1 : 0;
+        cycles = (cycles + ((addr & 0xFF) + this_.reg_x) & 0xFF00 ? 1 : 0) | 0;
         addr = (addr + this_.reg_x) & 0xFFFF;
         this_.reg_pc = (this_.reg_pc + 2) & 0xFFFF;
         var tmp1 = this_.load(addr);
@@ -1883,7 +1845,6 @@ JsWqx.prototype.op_func_tbl = [
         this_.flag_c = (tmp2 >= 0) | 0;
         this_.flag_v = ((this_.reg_a ^ tmp1) & (this_.reg_a ^ tmp2) & 0x80) >> 7;
         this_._setNz(this_.reg_a = tmp2 & 0xFF);
-        cycles = (cycles + cycles_add) | 0;
         cycles = (cycles + 4) | 0;
         return cycles;
     },
@@ -1975,6 +1936,14 @@ JsWqx.prototype._generateAndPlayJGWav = function() {
                     this_._switchBank(this_.rom_volume0[value]);
                 }
             }
+        }
+    }
+
+    function write05(this_, addr, value) {
+        var old_value = this_.p_io[addr];
+        this_.p_io[addr] = value;
+        if ((old_value ^ value) & 0x08) {
+            this_.slept = !(value & 0x08);
         }
     }
 
@@ -2295,6 +2264,11 @@ JsWqx.prototype.load = function(addr) {
         this.fp_step = 0;
         return 0x88;
     }
+    if (this.wake_up_pending && addr === 0x45F) {
+        this.wake_up_pending = false;
+        this.ram[addr] = this.wake_up_value;
+        return this.wake_up_value;
+    }
     return this.peekByte(addr);
 };
 
@@ -2437,13 +2411,38 @@ JsWqx.prototype.encounterCountDown = function() {
         ((this.clock_buff[5] & 0x80) && !(((this.clock_buff[5] ^ this.clock_buff[0])) & 0x3F)));
 };
 
+JsWqx.prototype.WAKE_UP_MAP = function(map) {
+    map[0x08] = 0x00;
+    map[0x09] = 0x08;
+    map[0x0A] = 0x0A;
+    map[0x0B] = 0x06;
+    map[0x0C] = 0x04;
+    map[0x0D] = 0x02;
+    map[0x0F] = 0x0C;
+    return map;
+}(new Uint8Array(0x10));
 JsWqx.prototype.setKey = function(key, value) {
     var row = key & 0x07;
     var col = key >> 3;
+    var bits = (key === 0x0F) ? 0xFE : (1 << col);
     if (value) {
-        this.keypad_matrix[row] |= 1 << col;
+        this.keypad_matrix[row] |= bits;
     } else {
-        this.keypad_matrix[row] &= ~(1 << col);
+        this.keypad_matrix[row] &= ~bits;
+    }
+    if (value) {
+        if (this.slept) {
+            if (key >= 0x08 && key <= 0x0F && key !== 0x0E) {
+                this.should_wake_up = true;
+                this.wake_up_pending = true;
+                this.wake_up_value = this.WAKE_UP_MAP[key];
+                this.slept = false;
+            }
+        } else {
+            if (key === 0x0F) {
+                this.slept = true;
+            }
+        }
     }
 };
 
@@ -2515,6 +2514,8 @@ JsWqx.prototype.reset = function() {
     this.jg_wav_idx = 0;
     this.jg_wav_playing = 0;
     this.fp_step = 0;
+    this.slept = false;
+    this.should_wake_up = false;
 
     this._cycles = 0;
     this._next_frame_cycles = this.CYCLES_FRAME;
@@ -2596,14 +2597,22 @@ JsWqx.prototype.frame = function() {
         if (cycles >= next_timer1_cycles) {
             next_timer1_cycles = (next_timer1_cycles + this.CYCLES_TIMER1) | 0;
             this.clock_buff[4]++;
-            this.p_io[0x01] |= 0x08;
-            should_irq = true;
+            if (!this.should_wake_up) {
+                this.p_io[0x01] |= 0x08;
+                should_irq = true;
+            } else {
+                this.p_io[0x01] |= 0x01;
+                this.p_io[0x02] |= 0x01;
+                this.reg_pc = this.peekWord(this.RESET_ADDR);
+                this.should_wake_up = false;
+            }
         }
     }
     this._next_timer0_cycles = (next_timer0_cycles - this.CYCLES_FRAME) | 0;
     this._next_timer1_cycles = (next_timer1_cycles - this.CYCLES_FRAME) | 0;
     this._cycles = (cycles - this.CYCLES_FRAME) | 0;
     this.updateLcd();
+
 };
 
 JsWqx.prototype.play = function() {

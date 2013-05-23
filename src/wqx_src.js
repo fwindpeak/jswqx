@@ -42,13 +42,18 @@ function JsWqx(){
     this.bbs_pages = new Array(0x10);
     this.memmap = new Array(8);
 
+    this.keypad_matrix = new Uint8Array(8);
+
     this.clock_buff = new Uint8Array(80);
     this.clock_flags = 0;
     this.jg_wav_buff = new Uint8Array(0x20);
     this.jg_wav_flags = 0;
     this.jg_wav_idx = 0;
     this.jg_wav_playing = 0;
-    this.keypad_matrix = new Uint8Array(8);
+    this.should_wake_up = false;
+    this.wake_up_pending = false;
+    this.wake_up_value = 0;
+    this.slept = false;
 
     // flash programming.
     this.fp_step = 0;
@@ -65,6 +70,8 @@ function JsWqx(){
     this._timer0_counter = 0;
     this._lcd_ctx = null;
     this._lcd_buff = new Uint8Array(1600);
+    this._lcd_last_write_addr = 0;
+
 }
 JsWqx.prototype.RESET_ADDR = 0xFFFC;
 JsWqx.prototype.NMI_ADDR = 0xFFFA;
@@ -215,6 +222,14 @@ JsWqx.prototype._generateAndPlayJGWav = function (){
                     this_._switchBank(this_.rom_volume0[value]);
                 }
             }
+        }
+    }
+
+    function write05(this_, addr, value){
+        var old_value = this_.p_io[addr];
+        this_.p_io[addr] = value;
+        if ((old_value ^ value) & 0x08) {
+            this_.slept = !(value & 0x08);
         }
     }
 
@@ -516,6 +531,11 @@ JsWqx.prototype.load = function (addr){
         this.fp_step = 0;
         return 0x88;
     }
+    if (this.wake_up_pending && addr === 0x45F) {
+        this.wake_up_pending = false;
+        this.ram[addr] = this.wake_up_value;
+        return this.wake_up_value;
+    }
     return this.peekByte(addr);
 };
 
@@ -660,13 +680,38 @@ JsWqx.prototype.encounterCountDown = function (){
         );
 };
 
+JsWqx.prototype.WAKE_UP_MAP = function (map){
+    map[0x08] = 0x00;
+    map[0x09] = 0x08;
+    map[0x0A] = 0x0A;
+    map[0x0B] = 0x06;
+    map[0x0C] = 0x04;
+    map[0x0D] = 0x02;
+    map[0x0F] = 0x0C;
+    return map;
+}(new Uint8Array(0x10));
 JsWqx.prototype.setKey = function (key, value){
     var row = key & 0x07;
     var col = key >> 3;
+    var bits = (key === 0x0F) ? 0xFE : (1 << col);
     if (value) {
-        this.keypad_matrix[row] |= 1 << col;
+        this.keypad_matrix[row] |= bits;
     } else {
-        this.keypad_matrix[row] &= ~(1 << col);
+        this.keypad_matrix[row] &= ~bits;
+    }
+    if (value) {
+        if (this.slept) {
+            if (key >= 0x08 && key <= 0x0F && key !== 0x0E) {
+                this.should_wake_up = true;
+                this.wake_up_pending = true;
+                this.wake_up_value = this.WAKE_UP_MAP[key];
+                this.slept = false;
+            }
+        } else {
+            if (key === 0x0F) {
+                this.slept = true;
+            }
+        }
     }
 };
 
@@ -738,6 +783,8 @@ JsWqx.prototype.reset = function (){
     this.jg_wav_idx = 0;
     this.jg_wav_playing = 0;
     this.fp_step = 0;
+    this.slept = false;
+    this.should_wake_up = false;
 
     this._cycles = 0;
     this._next_frame_cycles = this.CYCLES_FRAME;
@@ -819,14 +866,22 @@ JsWqx.prototype.frame = function (){
         if (cycles >= next_timer1_cycles) {
             next_timer1_cycles = (next_timer1_cycles + this.CYCLES_TIMER1) | 0;
             this.clock_buff[4] ++;
-            this.p_io[0x01] |= 0x08;
-            should_irq = true;
+            if (!this.should_wake_up) {
+                this.p_io[0x01] |= 0x08;
+                should_irq = true;
+            } else {
+				this.p_io[0x01] |= 0x01;
+				this.p_io[0x02] |= 0x01;
+				this.reg_pc = this.peekWord(this.RESET_ADDR);
+				this.should_wake_up = false;
+            }
         }
     }
     this._next_timer0_cycles = (next_timer0_cycles - this.CYCLES_FRAME) | 0;
     this._next_timer1_cycles = (next_timer1_cycles - this.CYCLES_FRAME) | 0;
     this._cycles = (cycles - this.CYCLES_FRAME) | 0;
     this.updateLcd();
+
 };
 
 JsWqx.prototype.play = function (){
